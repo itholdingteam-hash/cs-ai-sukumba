@@ -1,0 +1,48 @@
+services:
+  ai-service-docker:
+    build: ./ai-service
+    container_name: ai-service-docker
+    env_file:
+      - ./ai-service/.env
+    volumes:
+      - ./data/admin_panel.db:/home/tunet/admin-panel/admin_panel.db
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  admin-panel-docker:
+    build: ./admin-panel
+    container_name: admin-panel-docker
+    env_file:
+      - ./admin-panel/.env
+    volumes:
+      - ./data/admin_panel.db:/app/admin_panel.db
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  wa-gateway-docker:
+    build: ./wa-gateway
+    container_name: wa-gateway-docker
+    env_file:
+      - ./wa-gateway/.env
+    volumes:
+      - ./data/auth_info_baileys:/app/auth_info_baileys
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped

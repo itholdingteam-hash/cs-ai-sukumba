@@ -1,0 +1,12 @@
+import sqlite3
+conn = sqlite3.connect('/home/tunet/admin-panel/admin_panel.db')
+c = conn.cursor()
+c.execute('DELETE FROM conversation_logs')
+c.execute('DELETE FROM conversation_history')
+c.execute('DELETE FROM orders')
+conn.commit()
+print('✅ conversation_logs:', c.execute("SELECT COUNT(*) FROM conversation_logs").fetchone()[0])
+print('✅ conversation_history:', c.execute("SELECT COUNT(*) FROM conversation_history").fetchone()[0])
+print('✅ orders:', c.execute("SELECT COUNT(*) FROM orders").fetchone()[0])
+conn.close()
+print('🗑️ Database reset!')

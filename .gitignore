@@ -1,0 +1,16 @@
+.env
+*.env
+data/
+backups/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+auth_info_baileys/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+
+*.log
+*.out
