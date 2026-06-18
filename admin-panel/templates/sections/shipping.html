@@ -1,0 +1,21 @@
+      <!-- SHIPPING -->
+      <div class="section" id="section-shipping">
+        <div class="kb-hero">
+          <div>
+            <div class="kb-kicker">Biaya Pengiriman</div>
+            <div class="kb-title">Ongkir per wilayah</div>
+            <div class="kb-copy">Data ini dipakai untuk menghitung total pesanan setelah alamat pelanggan lengkap.</div>
+          </div>
+          <div class="kb-stats">
+            <div class="kb-stat"><div class="kb-stat-value" id="shipping-count">0</div><div class="kb-stat-label">Tarif aktif</div></div>
+          </div>
+        </div>
+
+        <div class="section-actions">
+          <button class="btn btn-ghost" type="button" onclick="openShippingGenerateModal()">Generate Kecamatan</button>
+          <button class="btn btn-primary" type="button" onclick="openShippingModal()">&#x2795; Tambah Ongkir</button>
+        </div>
+
+        <div id="shipping-list" class="kb-list"></div>
+        <div class="empty" id="shipping-empty" style="display:none"><div class="empty-icon">&#x1F69A;</div><div class="empty-text">Belum ada data ongkir</div></div>
+      </div>

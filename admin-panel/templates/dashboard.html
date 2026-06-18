@@ -1,378 +1,133 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sukumba — Command Center</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#080C14;--surface:#0F1623;--surface2:#161E2E;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --teal:#00C9A7;--teal2:#00A88A;--teal-dim:rgba(0,201,167,0.12);
-  --red:#FF5B7A;--red-dim:rgba(255,91,122,0.12);
-  --amber:#FFB547;--amber-dim:rgba(255,181,71,0.12);
-  --blue:#5B8BFF;--green:#4ADE80;--green-dim:rgba(74,222,128,0.12);
-  --purple:#A78BFA;--purple-dim:rgba(167,139,250,0.12);
-  --text:#E8EDF5;--text2:#8896AA;--text3:#4F5E70;
-  --radius:12px;--radius-sm:8px;--sidebar:220px;
-}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px}
-.layout{display:flex;height:100vh;overflow:hidden}
-.sidebar{width:var(--sidebar);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 12px;position:relative;z-index:10}
-.sidebar::after{content:'';position:absolute;top:0;right:0;width:1px;height:100%;background:linear-gradient(180deg,transparent,var(--teal) 40%,transparent);opacity:0.3}
-.logo{display:flex;align-items:center;gap:10px;padding:8px 10px 24px;border-bottom:1px solid var(--border);margin-bottom:16px}
-.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--teal),var(--teal2));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px}.logo-sub{font-size:10px;color:var(--text2)}
-.nav-section{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 10px 8px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text2);font-weight:500;transition:all 0.15s;margin-bottom:2px;position:relative}
-.nav-item:hover{background:var(--surface2);color:var(--text)}
-.nav-item.active{background:var(--teal-dim);color:var(--teal)}
-.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:18px;background:var(--teal);border-radius:2px}
-.nav-icon{font-size:16px;width:20px;text-align:center}
-.nav-badge{margin-left:auto;background:var(--red);color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px}
-.sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid var(--border)}
-.wa-bar{display:flex;align-items:center;gap:8px;padding:10px;border-radius:var(--radius-sm);background:var(--surface2);font-size:12px}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dot.connected{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
-.dot.disconnected{background:var(--red)}.dot.waiting{background:var(--amber)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
-.page-title{font-size:18px;font-weight:700;letter-spacing:-0.3px}.page-sub{font-size:12px;color:var(--text2);margin-top:2px}
-.topbar-actions{display:flex;gap:10px;align-items:center}
-.content{padding:24px 28px;flex:1}
-.section{display:none}.section.active{display:block}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.card-title{font-size:14px;font-weight:600}.card-sub{font-size:12px;color:var(--text2);margin-top:2px}
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.stat-card.teal::before{background:var(--teal)}.stat-card.blue::before{background:var(--blue)}.stat-card.green::before{background:var(--green)}
-.stat-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
-.stat-value{font-size:32px;font-weight:700;margin:8px 0 4px;letter-spacing:-1px}
-.stat-trend{font-size:12px;color:var(--text2)}.stat-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:32px;opacity:0.08}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;font-family:inherit}
-.btn:disabled{opacity:0.4;cursor:not-allowed}
-.btn-primary{background:var(--teal);color:#000}.btn-primary:hover:not(:disabled){background:var(--teal2)}
-.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2)}.btn-ghost:hover:not(:disabled){background:var(--surface2);color:var(--text)}
-.btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,91,122,0.2)}.btn-danger:hover:not(:disabled){background:rgba(255,91,122,0.2)}
-.btn-export{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.25)}.btn-export:hover:not(:disabled){background:rgba(74,222,128,0.2)}
-.btn-purple{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,0.25)}.btn-purple:hover:not(:disabled){background:rgba(167,139,250,0.2)}
-.btn-sm{padding:6px 12px;font-size:12px}.btn-xs{padding:4px 8px;font-size:11px;border-radius:6px}
-.input,.textarea,.select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;transition:border-color 0.15s;outline:none}
-.input:focus,.textarea:focus,.select:focus{border-color:var(--teal)}.textarea{resize:vertical;min-height:80px}.select option{background:var(--surface2)}
-.label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.form-row{margin-bottom:14px}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
-.badge-teal{background:var(--teal-dim);color:var(--teal)}.badge-red{background:var(--red-dim);color:var(--red)}
-.badge-amber{background:var(--amber-dim);color:var(--amber)}.badge-green{background:var(--green-dim);color:var(--green)}
-.badge-blue{background:rgba(91,139,255,0.12);color:var(--blue)}
-.kb-hero{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:18px}
-.kb-kicker{font-size:10px;color:var(--teal);font-weight:700;text-transform:uppercase;letter-spacing:0.9px;margin-bottom:5px}
-.kb-title{font-size:16px;font-weight:700;margin-bottom:4px}.kb-copy{font-size:12px;color:var(--text2);line-height:1.55;max-width:720px}
-.kb-stats{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.kb-stat{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;min-width:116px}
-.kb-stat-value{font-size:18px;font-weight:700;color:var(--text)}.kb-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-top:1px}
-.kb-list{display:grid;gap:14px}
-.product-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:flex-start;gap:14px;margin-bottom:0}
-.product-item.kb-card{display:block;padding:0;overflow:hidden}
-.kb-card-head{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:start;padding:16px;border-bottom:1px solid var(--border)}
-.kb-card-body{padding:14px 16px 16px}
-.product-thumb{width:56px;height:56px;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden}
-.product-thumb img{width:100%;height:100%;object-fit:cover}
-.product-name{font-weight:600;font-size:14px}.product-price{color:var(--teal);font-weight:700;font-size:13px;margin-top:2px}
-.product-summary{font-size:12px;color:var(--text2);line-height:1.5;margin-top:8px;max-width:900px}
-.product-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:10px}
-.product-feature{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text2);line-height:1.35}
-.product-feature::before{content:'+';color:var(--teal);font-weight:700;margin-right:6px}
-.kb-meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px}
-.kb-meta{background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
-.kb-meta-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px}.kb-meta-value{font-size:12px;color:var(--text2);line-height:1.5}
-.product-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
-.faq-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.faq-head{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:16px;border-bottom:1px solid var(--border)}
-.faq-question{font-size:14px;font-weight:700;line-height:1.45;margin-top:8px}.faq-answer{padding:14px 16px 16px;font-size:13px;color:var(--text2);line-height:1.65;max-width:980px}
-.faq-answer p{margin-bottom:8px}.faq-answer p:last-child{margin-bottom:0}.faq-answer ul{padding-left:18px;margin:6px 0}.faq-answer li{margin-bottom:5px}
-.faq-source{display:inline-flex;align-items:center;gap:5px;background:var(--teal-dim);color:var(--teal);border:1px solid rgba(0,201,167,0.25);border-radius:20px;padding:3px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
-.chat-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);height:320px;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-.chat-msg{display:flex;flex-direction:column}.chat-msg.user{align-items:flex-end}.chat-msg.ai{align-items:flex-start}
-.chat-bubble{max-width:75%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5}
-.chat-msg.user .chat-bubble{background:var(--teal);color:#000;border-radius:12px 12px 2px 12px}
-.chat-msg.ai .chat-bubble{background:var(--surface);border:1px solid var(--border);border-radius:12px 12px 12px 2px}
-.chat-agent{font-size:10px;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace}
-.chat-input-row{display:flex;gap:10px;margin-top:12px}
-.prompt-card{border-radius:var(--radius);overflow:hidden;margin-bottom:16px;border:1px solid var(--border)}
-.prompt-header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border)}
-.prompt-icon{font-size:18px}.prompt-title{font-weight:600;font-size:13px}.prompt-trigger{margin-left:auto;font-size:11px;color:var(--text3)}
-.prompt-body{padding:12px;background:var(--surface)}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-overlay.open{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:modalIn 0.2s ease}
-@keyframes modalIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.modal-title{font-size:16px;font-weight:700;margin-bottom:20px}.modal-footer{display:flex;gap:10px;margin-top:20px}
-.wa-status-big{border-radius:var(--radius);padding:20px;text-align:center;margin-bottom:20px;border:1px solid var(--border)}
-.wa-status-big.connected{background:var(--green-dim);border-color:rgba(74,222,128,0.2)}
-.wa-status-big.waiting{background:var(--amber-dim);border-color:rgba(255,181,71,0.2)}
-.wa-status-big.disconnected{background:var(--red-dim);border-color:rgba(255,91,122,0.2)}
-.wa-status-big .status-label{font-size:16px;font-weight:700;margin-top:8px}
-.order-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
-.order-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.order-id{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--teal)}
-.order-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.order-field{background:var(--surface);border-radius:8px;padding:10px}
-.order-field-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:3px}
-.order-field-value{font-size:13px;font-weight:500}.order-actions{display:flex;gap:6px;flex-wrap:wrap}
-.log-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
-.log-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.log-number{font-family:'DM Mono',monospace;font-size:12px;color:var(--teal);font-weight:600}.log-time{font-size:11px;color:var(--text3)}
-.log-message{padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;margin-bottom:6px}
-.log-user{background:var(--surface);border-left:2px solid var(--blue)}.log-ai{background:var(--surface);border-left:2px solid var(--teal)}
-.settings-section{margin-bottom:28px}
-.settings-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.empty{text-align:center;padding:48px 20px;color:var(--text3)}.empty-icon{font-size:40px;margin-bottom:12px}.empty-text{font-size:14px}
-.toast{position:fixed;bottom:24px;right:24px;z-index:200;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:12px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);animation:toastIn 0.3s ease;font-size:13px;font-weight:500}
-@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.filter-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
-.filter-tab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all 0.15s;font-family:inherit}
-.filter-tab.active{background:var(--teal-dim);color:var(--teal);border-color:rgba(0,201,167,0.3)}.filter-tab:hover:not(.active){background:var(--surface2)}
-.pagination{display:flex;gap:6px;justify-content:center;margin-top:16px}
-.page-btn{padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all 0.15s;font-family:inherit}
-.page-btn.active{background:var(--teal);color:#000;border-color:var(--teal)}
-.mode-tab{padding:7px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);color:var(--text2);background:transparent;transition:all 0.15s;font-family:inherit}
-.mode-tab.active{background:var(--teal-dim);color:var(--teal);border-color:rgba(0,201,167,0.3)}.mode-tab:hover:not(.active){background:var(--surface2)}
-.cl-wrap{overflow-x:auto}
-.cl-table{width:100%;border-collapse:collapse;min-width:1100px}
-.cl-table th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.7px;padding:8px 6px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
-.cl-table td{padding:4px 3px;border-bottom:1px solid var(--border);vertical-align:middle}
-.cl-table tr:hover td{background:rgba(255,255,255,0.02)}.cl-table tr:last-child td{border-bottom:none}
-.td-input{background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;width:100%;outline:none;transition:border-color 0.15s;min-width:80px}
-.td-input:focus{border-color:var(--teal);background:var(--surface2)}.td-input.wide{min-width:180px}
-.td-select{background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-family:inherit;font-size:11px;width:100%;outline:none;transition:border-color 0.15s;cursor:pointer;min-width:70px}
-.td-select:focus,.td-select:hover{border-color:var(--teal);background:var(--surface2)}.td-select option{background:#161E2E}
-.del-btn{background:transparent;border:none;color:var(--text3);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:13px;transition:all 0.15s}.del-btn:hover{color:var(--red);background:var(--red-dim)}
-.spinner{width:14px;height:14px;border:2px solid rgba(0,201,167,0.3);border-top-color:var(--teal);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
-@keyframes spin{to{transform:rotate(360deg)}}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
-</style>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Sukumba — Command Center{% endblock %}
+
+{% block content %}
+<div class="mobile-overlay" id="mobile-overlay" onclick="closeSidebar()"></div>
 <div class="layout">
-  <aside class="sidebar">
-    <div class="logo">
-      <div class="logo-icon">&#x1F434;</div>
-      <div><div class="logo-text">Sukumba</div><div class="logo-sub">Command Center</div></div>
-    </div>
-    <div class="nav-section">Menu</div>
-    <div class="nav-item" onclick="showSection('whatsapp')"><span class="nav-icon">&#x1F4F1;</span> WhatsApp</div>
-    <div class="nav-item" onclick="showSection('products')"><span class="nav-icon">&#x1F4E6;</span> Products</div>
-    <div class="nav-item" onclick="showSection('faqs')"><span class="nav-icon">&#x2753;</span> FAQs</div>
-    <div class="nav-item" onclick="showSection('test')"><span class="nav-icon">&#x1F9EA;</span> Test AI</div>
-    <div class="nav-item" onclick="showSection('prompt')"><span class="nav-icon">&#x270F;&#xFE0F;</span> Agent Prompts</div>
-    <div class="nav-section" style="margin-top:12px">Data</div>
-    <div class="nav-item" onclick="showSection('orders')"><span class="nav-icon">&#x1F6D2;</span> Orders <span class="nav-badge" id="new-order-count" style="display:none">0</span></div>
-    <div class="nav-item" onclick="showSection('logs')"><span class="nav-icon">&#x1F4CA;</span> Analytics</div>
-    <div class="nav-section" style="margin-top:12px">System</div>
-    <div class="nav-item" onclick="showSection('settings')"><span class="nav-icon">&#x2699;&#xFE0F;</span> Settings</div>
-    <div class="nav-item" onclick="location.href='/logout'"><span class="nav-icon">&#x1F6AA;</span> Logout</div>
-    <div class="sidebar-footer">
-      <div class="wa-bar">
-        <div class="dot disconnected" id="sidebar-dot"></div>
-        <div style="min-width:0"><div style="font-weight:600;font-size:12px" id="sidebar-status">Disconnected</div><div style="font-size:10px;color:var(--text3)">WhatsApp</div></div>
-      </div>
-    </div>
-  </aside>
+  {% include "components/sidebar.html" %}
   <div class="main">
-    <div class="topbar">
-      <div><div class="page-title" id="page-title">WhatsApp</div><div class="page-sub" id="page-sub">Kelola koneksi WhatsApp</div></div>
-      <div class="topbar-actions" id="topbar-actions"></div>
-    </div>
+    {% include "components/topbar.html" %}
     <div class="content">
 
       <!-- WHATSAPP -->
       <div class="section active" id="section-whatsapp">
-        <div id="wa-status-big" class="wa-status-big disconnected">
-          <div style="font-size:40px" id="wa-status-emoji">&#x1F4F5;</div>
-          <div class="status-label" id="wa-status-label">Checking...</div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px" id="wa-status-sub"></div>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:center;margin-bottom:24px">
-          <button class="btn btn-ghost" onclick="loadWAStatus()">&#x1F504; Refresh</button>
-          <button class="btn btn-primary" onclick="reconnectWA()">&#x1F50C; Reconnect</button>
-          <button class="btn btn-danger" onclick="disconnectWA()">Disconnect</button>
-        </div>
-        <div id="qr-section" class="card" style="display:none;text-align:center;padding:32px">
-          <div style="font-size:15px;font-weight:700;margin-bottom:8px">Scan QR Code</div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:20px">WhatsApp &#x2192; Linked Devices &#x2192; Link a Device</div>
-          <div id="qr-container" style="display:flex;justify-content:center"></div>
-        </div>
-        <div id="connected-info" class="card" style="display:none;text-align:center;padding:32px">
-          <div style="font-size:40px;margin-bottom:12px">&#x2705;</div>
-          <div style="font-size:16px;font-weight:700;color:var(--green)">WhatsApp Terhubung</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:6px">AI CS aktif dan siap menerima pesan</div>
-        </div>
-      </div>
-
-      <!-- PRODUCTS -->
-      <div class="section" id="section-products">
-        <div class="kb-hero">
-          <div>
-            <div class="kb-kicker">Baseline CS AI</div>
-            <div class="kb-title">Produk sebagai dasar jawaban pelanggan</div>
-            <div class="kb-copy">Data produk dipakai saat pelanggan bertanya soal manfaat, harga, promo, cara konsumsi, target keluhan, dan rekomendasi paket.</div>
-          </div>
-          <div class="kb-stats">
-            <div class="kb-stat"><div class="kb-stat-value" id="products-count">0</div><div class="kb-stat-label">Produk aktif</div></div>
-            <div class="kb-stat"><div class="kb-stat-value" id="features-count">0</div><div class="kb-stat-label">Poin manfaat</div></div>
-          </div>
-        </div>
-        <div id="products-list" class="kb-list"></div>
-        <div class="empty" id="products-empty" style="display:none"><div class="empty-icon">&#x1F4E6;</div><div class="empty-text">Belum ada produk</div></div>
-      </div>
-
-      <!-- FAQS -->
-      <div class="section" id="section-faqs">
-        <div class="kb-hero">
-          <div>
-            <div class="kb-kicker">Baseline CS AI</div>
-            <div class="kb-title">FAQ sebagai jawaban siap pakai</div>
-            <div class="kb-copy">FAQ dipakai untuk pertanyaan berulang seperti khasiat, cara minum, keamanan, promo, pengiriman, dan keberatan pelanggan.</div>
-          </div>
-          <div class="kb-stats">
-            <div class="kb-stat"><div class="kb-stat-value" id="faqs-count">0</div><div class="kb-stat-label">FAQ aktif</div></div>
-          </div>
-        </div>
-        <div id="faqs-list" class="kb-list"></div>
-        <div class="empty" id="faqs-empty" style="display:none"><div class="empty-icon">&#x2753;</div><div class="empty-text">Belum ada FAQ</div></div>
-      </div>
-
-      <!-- TEST AI -->
-      <div class="section" id="section-test">
-        <div class="card">
-          <div class="card-header">
-            <div><div class="card-title">Test AI</div><div class="card-sub">Simulasi percakapan multi-agent</div></div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <span class="badge badge-teal" id="agent-badge" style="display:none;font-family:'DM Mono',monospace"></span>
-              <button class="btn btn-ghost btn-sm" onclick="clearChat()">Clear</button>
+        <div class="wa-dashboard">
+          <section id="wa-status-big" class="wa-overview disconnected" aria-live="polite">
+            <div class="wa-overview-head">
+              <div class="wa-status-main">
+                <div class="wa-status-icon" id="wa-status-emoji" aria-hidden="true">📵</div>
+                <div class="wa-status-copy">
+                  <div class="wa-eyebrow">
+                    <span class="wa-badge" id="wa-status-badge">Memeriksa</span>
+                  </div>
+                  <h2 class="wa-status-title" id="wa-status-label">Memeriksa koneksi WhatsApp...</h2>
+                  <p class="wa-status-desc" id="wa-status-sub">Mohon tunggu sebentar.</p>
+                </div>
+              </div>
+              <div class="wa-check">
+                <div class="wa-check-label">Terakhir diperiksa</div>
+                <div class="wa-check-time" id="wa-last-check">Belum tersedia</div>
+              </div>
             </div>
+          </section>
+
+          <div class="wa-actions" aria-label="Aksi koneksi WhatsApp">
+            <button class="btn btn-ghost" id="wa-refresh-btn" type="button" onclick="loadWAStatus(true)">↻ Muat ulang</button>
+            <button class="btn btn-primary" id="wa-reconnect-btn" type="button" onclick="reconnectWA()">🔌 Hubungkan ulang</button>
+            <button class="btn btn-ghost" id="wa-reset-session-btn" type="button" onclick="resetWASession()">Scan QR ulang</button>
+            <button class="btn btn-danger" id="wa-disconnect-btn" type="button" onclick="disconnectWA()">Putuskan koneksi</button>
+            <span class="wa-actions-spacer"></span>
+            <span class="wa-help">Status diperbarui otomatis setiap 30 detik.</span>
           </div>
-          <div class="chat-box" id="chat"><div style="text-align:center;color:var(--text3);font-size:12px;margin:auto">Mulai percakapan...</div></div>
-          <div class="chat-input-row">
-            <input class="input" id="msg" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter')sendMsg()">
-            <button class="btn btn-primary" onclick="sendMsg()">Kirim</button>
+
+          <div class="wa-info-grid">
+            <article class="wa-info-card">
+              <div class="wa-info-label">Status layanan</div>
+              <div class="wa-info-value"><span id="wa-service-dot" class="dot disconnected"></span><span id="wa-service-status">Tidak aktif</span></div>
+              <div class="wa-info-note">Kesiapan gateway WhatsApp</div>
+            </article>
+            <article class="wa-info-card">
+              <div class="wa-info-label">Customer Service AI</div>
+              <div class="wa-info-value" id="wa-ai-status">Menunggu koneksi</div>
+              <div class="wa-info-note">Penerimaan dan balasan pesan</div>
+            </article>
+            <article class="wa-info-card">
+              <div class="wa-info-label">Pembaruan otomatis</div>
+              <div class="wa-info-value">Setiap 30 detik</div>
+              <div class="wa-info-note">Tidak perlu memuat ulang halaman</div>
+            </article>
           </div>
-        </div>
-      </div>
 
-      <!-- PROMPTS -->
-      <div class="section" id="section-prompt">
-        <div class="prompt-card"><div class="prompt-header"><span class="prompt-icon">&#x1F44B;</span><div><div class="prompt-title">Greeting Agent</div></div><span class="prompt-trigger">halo &middot; hai &middot; permisi</span></div><div class="prompt-body"><textarea class="textarea" id="prompt-greeting" rows="3"></textarea></div></div>
-        <div class="prompt-card"><div class="prompt-header"><span class="prompt-icon">&#x1F4E6;</span><div><div class="prompt-title">Product Agent</div></div><span class="prompt-trigger">tanya produk &middot; manfaat &middot; keluhan</span></div><div class="prompt-body"><textarea class="textarea" id="prompt-product" rows="3"></textarea></div></div>
-        <div class="prompt-card"><div class="prompt-header"><span class="prompt-icon">&#x1F6D2;</span><div><div class="prompt-title">Order Agent</div></div><span class="prompt-trigger">mau beli &middot; pesan &middot; order</span></div><div class="prompt-body"><textarea class="textarea" id="prompt-order" rows="3"></textarea></div></div>
-        <div class="prompt-card"><div class="prompt-header"><span class="prompt-icon">&#x1F198;</span><div><div class="prompt-title">Escalation Agent</div></div><span class="prompt-trigger">komplain &middot; status &middot; belum sampai</span></div><div class="prompt-body"><textarea class="textarea" id="prompt-escalation" rows="3"></textarea></div></div>
-        <button class="btn btn-primary" onclick="savePrompts()">&#x1F4BE; Save All Prompts</button>
-      </div>
-
-      <!-- ORDERS -->
-      <div class="section" id="section-orders">
-        <div class="filter-tabs">
-          <button class="filter-tab active" onclick="loadOrders('',this)">Semua</button>
-          <button class="filter-tab" onclick="loadOrders('new',this)">&#x1F195; Baru</button>
-          <button class="filter-tab" onclick="loadOrders('process',this)">&#x2699;&#xFE0F; Proses</button>
-          <button class="filter-tab" onclick="loadOrders('done',this)">&#x2705; Selesai</button>
-        </div>
-        <div id="orders-list"></div>
-        <div class="empty" id="orders-empty" style="display:none"><div class="empty-icon">&#x1F6D2;</div><div class="empty-text">Belum ada pesanan</div></div>
-      </div>
-
-      <!-- LOGS -->
-      <div class="section" id="section-logs">
-        <div class="stats-grid">
-          <div class="stat-card teal"><div class="stat-label">Total Percakapan</div><div class="stat-value" id="stat-total">&mdash;</div><div class="stat-trend">Semua waktu</div><div class="stat-icon">&#x1F4AC;</div></div>
-          <div class="stat-card blue"><div class="stat-label">Hari Ini</div><div class="stat-value" id="stat-today">&mdash;</div><div class="stat-trend">Percakapan baru</div><div class="stat-icon">&#x1F4C5;</div></div>
-          <div class="stat-card green"><div class="stat-label">User Unik</div><div class="stat-value" id="stat-users">&mdash;</div><div class="stat-trend">Total pelanggan</div><div class="stat-icon">&#x1F465;</div></div>
-        </div>
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header"><div class="card-title">&#x1F3C6; User Paling Aktif</div></div>
-          <div id="top-users"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Riwayat Percakapan</div><button class="btn btn-ghost btn-sm" onclick="loadLogs()">&#x1F504; Refresh</button></div>
-          <div id="logs-list"></div>
-          <div class="pagination" id="pagination"></div>
-        </div>
-      </div>
-
-      <!-- SETTINGS -->
-      <div class="section" id="section-settings">
-        <div class="settings-section">
-          <div class="settings-title">&#x1F3E2; Informasi Perusahaan</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Nama Perusahaan</label><input class="input" id="s-name"></div>
-            <div class="form-row"><label class="label">Kontak WA</label><input class="input" id="s-contact"></div>
-            <div class="form-row"><label class="label">Lokasi</label><input class="input" id="s-location"></div>
-            <div class="form-row"><label class="label">Jam Operasional</label><input class="input" id="s-hours"></div>
-          </div>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x1F916; AI Engine</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Provider</label>
-              <select class="select" id="s-provider">
-                <option value="openrouter">OpenRouter</option>
-                <option value="groq">Groq</option>
-                <option value="openai">OpenAI Compatible</option>
-                <option value="local">Local LLM</option>
-              </select>
+          <section id="qr-section" class="wa-panel" hidden>
+            <div class="wa-panel-head">
+              <div><div class="wa-panel-title">Hubungkan perangkat WhatsApp</div><div class="wa-panel-sub">Pindai QR Code melalui aplikasi WhatsApp di ponsel.</div></div>
+              <span class="badge badge-amber">Menunggu pemindaian</span>
             </div>
-            <div class="form-row"><label class="label">API URL</label><input class="input" id="s-api-url" placeholder="https://openrouter.ai/api/v1/chat/completions"></div>
-            <div class="form-row"><label class="label">Model AI</label>
-              <input class="input" id="s-model" list="model-options" placeholder="qwen/qwen3-32b:free">
-              <datalist id="model-options">
-                <option value="qwen/qwen3-32b:free">
-                <option value="meta-llama/llama-3.3-70b-instruct:free">
-                <option value="deepseek/deepseek-v4-flash:free">
-                <option value="openrouter/free">
-                <option value="openai/gpt-5.4-mini">
-                <option value="anthropic/claude-haiku-4.5">
-                <option value="llama-3.3-70b-versatile">
-                <option value="llama-3.1-8b-instant">
-              </datalist>
+            <div class="wa-qr-layout">
+              <div id="qr-container" class="wa-qr-box"></div>
+              <div class="wa-steps">
+                <div class="wa-step"><span class="wa-step-number">1</span><span class="wa-step-text">Buka aplikasi WhatsApp pada ponsel.</span></div>
+                <div class="wa-step"><span class="wa-step-number">2</span><span class="wa-step-text">Masuk ke <strong>Perangkat tertaut</strong>.</span></div>
+                <div class="wa-step"><span class="wa-step-number">3</span><span class="wa-step-text">Pilih <strong>Tautkan perangkat</strong>, lalu pindai QR Code.</span></div>
+              </div>
             </div>
-            <div class="form-row"><label class="label">API Key</label><input class="input" id="s-apikey" type="password" placeholder="OpenRouter/Groq/OpenAI key"></div>
-            <div class="form-row"><label class="label">Temperature (0&ndash;1)</label><input class="input" id="s-temp" type="number" step="0.1" min="0" max="1"></div>
-            <div class="form-row"><label class="label">Max Tokens</label><input class="input" id="s-tokens" type="number" min="100" max="2000"></div>
-          </div>
-          <button class="btn btn-primary" onclick="saveSettings()">&#x1F4BE; Save Settings</button>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x2708;&#xFE0F; Telegram Bot</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Bot Token</label><input class="input" id="s-tg-token" type="password" placeholder="123456:AAxxxx"></div>
-            <div class="form-row" style="display:flex;align-items:flex-end"><button class="btn btn-ghost" onclick="setTelegramWebhook()" style="width:100%">&#x1F517; Set Webhook</button></div>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="saveTgToken()">&#x1F4BE; Save Token</button>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x1F9EA; Testing Memory</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Nomor WA Customer</label><input class="input" id="reset-memory-number" placeholder="62812xxxx"></div>
-            <div class="form-row" style="display:flex;align-items:flex-end;gap:8px">
-              <button class="btn btn-ghost" onclick="checkCustomerMemory()" style="flex:1">Cek Memory</button>
-              <button class="btn btn-danger" onclick="resetCustomerMemory()" style="flex:1">Reset</button>
-            </div>
-          </div>
-          <div id="memory-reset-result" style="font-size:12px;color:var(--text2);line-height:1.5"></div>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title"><span>&#x1F465; Telegram Whitelist</span><button class="btn btn-primary btn-sm" onclick="openAddTgUser()">&#x2795; Tambah</button></div>
-          <div id="tg-users-list"></div>
+          </section>
         </div>
       </div>
+
+      {% include "sections/products.html" %}
+
+      {% include "sections/faqs.html" %}
+
+      {% include "sections/testimonials.html" %}
+
+      {% include "sections/cs_templates.html" %}
+
+      {% include "sections/test_ai.html" %}
+
+      {% include "sections/prompt_agent.html" %}
+
+      {% include "sections/orders.html" %}
+
+      {% include "sections/finance.html" %}
+
+      {% include "sections/shipping.html" %}
+
+      {% include "sections/analytics.html" %}
+
+      {% include "sections/settings.html" %}
+
+
 
     </div>
+  </div>
+</div>
+
+<!-- TESTIMONIAL MODAL -->
+<div class="modal-overlay" id="modal-testimonial">
+  <div class="modal">
+    <div class="modal-title" id="modal-testimonial-title">&#x2795; Tambah Testimoni</div>
+    <input type="hidden" id="t-id"><input type="hidden" id="t-media-url">
+    <div class="form-row"><label class="label">Judul *</label><input class="input" id="t-title" placeholder="Contoh: Testimoni Nyeri Sendi 01"></div>
+    <div class="form-row"><label class="label">Caption</label><textarea class="textarea" id="t-caption" rows="3" placeholder="Catatan singkat untuk konteks testimoni."></textarea></div>
+    <div class="form-row"><label class="label">Urutan</label><input class="input" id="t-sort-order" type="number" min="0" value="0"></div>
+    <div class="form-row"><label class="label">Foto/Video *</label><input type="file" class="input" id="t-file" accept="image/*,video/*" onchange="previewFile('t-file','t-preview','t-media-url')" style="padding:8px"><div id="t-preview" style="margin-top:8px"></div></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-testimonial')">Batal</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveTestimonial()">&#x1F4BE; Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MEDIA PREVIEW MODAL -->
+<div class="modal-overlay" id="modal-media-preview" onclick="if(event.target===this) closeMediaPreview()">
+  <div class="modal media-preview-modal">
+    <div class="media-preview-head">
+      <div class="modal-title media-preview-title" id="media-preview-title">Preview testimoni</div>
+      <button class="btn btn-ghost btn-xs" type="button" onclick="closeMediaPreview()" aria-label="Tutup preview">&#x2715;</button>
+    </div>
+    <div id="media-preview-content" class="media-preview-content"></div>
   </div>
 </div>
 
@@ -413,708 +168,101 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   </div>
 </div>
 
-<script>
-// ================================================================
-// STATE
-// ================================================================
-var chatHistory = [];
-var qrInterval = null;
-var waStatusLoading = false;
-var waStatusBackoffUntil = 0;
+<!-- CS TEMPLATE MODAL -->
+<div class="modal-overlay" id="modal-cs-template">
+  <div class="modal">
+    <div class="modal-title" id="modal-cs-template-title">&#x2795; Tambah Template CS</div>
+    <input type="hidden" id="cst-id">
+    <div class="form-row"><label class="label">Judul/Topik *</label><input class="input" id="cst-title" placeholder="Contoh: Format Order"></div>
+    <div class="form-row"><label class="label">Isi Template *</label><textarea class="textarea" id="cst-content" rows="6" placeholder="Isi pesan yang akan dikirim..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-cs-template')">Batal</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveCsTemplate()">&#x1F4BE; Simpan</button>
+    </div>
+  </div>
+</div>
 
-var pageTitles = {
-  whatsapp: ["WhatsApp","Kelola koneksi WhatsApp"],
-  products: ["Products","Baseline jawaban produk CS AI"],
-  faqs:     ["FAQs","Baseline pertanyaan pelanggan"],
-  test:     ["Test AI","Simulasi percakapan multi-agent"],
-  prompt:   ["Agent Prompts","Kustomisasi perilaku tiap agent"],
-  orders:   ["Orders","Manajemen pesanan"],
-  logs:     ["Analytics","Statistik & riwayat"],
-  settings: ["Settings","Konfigurasi sistem"]
-};
+<!-- SHIPPING GENERATE MODAL -->
+<div class="modal-overlay" id="modal-shipping-generate">
+  <div class="modal">
+    <div class="modal-title">Generate Ongkir Kecamatan</div>
+    <div class="grid-2">
+      <div class="form-row"><label class="label">Provinsi</label><select class="select" id="ship-gen-province"></select></div>
+      <div class="form-row"><label class="label">Kab/Kota *</label><select class="select" id="ship-gen-city" disabled></select></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-row">
+        <label class="label">Ongkir *</label>
+        <input class="input" id="ship-gen-cost" inputmode="numeric" placeholder="Otomatis dari wilayah">
+        <div class="field-hint" id="ship-gen-cost-hint">Pilih provinsi dan kab/kota untuk estimasi otomatis.</div>
+      </div>
+      <div class="form-row"><label class="label">Estimasi</label><input class="input" id="ship-gen-estimated-days" placeholder="Contoh: 4-7 hari"></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-row"><label class="label">Kurir</label><input class="input" id="ship-gen-courier" value="JNE"></div>
+      <div class="form-row"><label class="label">Layanan</label><input class="input" id="ship-gen-service" value="REG"></div>
+    </div>
+    <div class="form-row">
+      <label class="label">Daftar Kecamatan *</label>
+      <textarea class="textarea" id="ship-gen-districts" rows="7" placeholder="Satu kecamatan per baris&#10;Contoh:&#10;Ajibarang&#10;Baturaden&#10;Purwokerto Timur"></textarea>
+    </div>
+    <div class="form-row"><label class="label">Catatan</label><textarea class="textarea" id="ship-gen-notes" rows="2" placeholder="Opsional"></textarea></div>
+    <label class="check-row"><input type="checkbox" id="ship-gen-overwrite"> Update jika data kecamatan sudah ada</label>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-shipping-generate')">Batal</button>
+      <button class="btn btn-primary" style="flex:1" onclick="generateShippingRates()">Generate</button>
+    </div>
+  </div>
+</div>
 
-// ================================================================
-// NAVIGATION
-// ================================================================
-function showSection(name) {
-  document.querySelectorAll(".section").forEach(function(s){ s.classList.remove("active"); });
-  document.querySelectorAll(".nav-item").forEach(function(n){ n.classList.remove("active"); });
-  document.getElementById("section-"+name).classList.add("active");
-  document.querySelectorAll(".nav-item").forEach(function(n){
-    var oc = n.getAttribute("onclick") || "";
-    if(oc.indexOf(name) > -1) n.classList.add("active");
-  });
-  var t = pageTitles[name] || [name,""];
-  document.getElementById("page-title").textContent = t[0];
-  document.getElementById("page-sub").textContent = t[1];
-  var actions = document.getElementById("topbar-actions");
-  actions.innerHTML = "";
-  if(name === "products") {
-    var btn = document.createElement("button");
-    btn.className = "btn btn-primary";
-    btn.textContent = "+ Tambah Produk";
-    btn.onclick = function(){ openModal("modal-product","add"); };
-    actions.appendChild(btn);
-  }
-  if(name === "faqs") {
-    var btn = document.createElement("button");
-    btn.className = "btn btn-primary";
-    btn.textContent = "+ Tambah FAQ";
-    btn.onclick = function(){ openModal("modal-faq","add"); };
-    actions.appendChild(btn);
-  }
-  if(name === "whatsapp") loadWAStatus();
-  if(name === "products") loadProducts();
-  if(name === "faqs")     loadFAQs();
-  if(name === "prompt")   loadPrompts();
-  if(name === "settings") { loadSettings(); loadTgUsers(); }
-  if(name === "logs")     { loadAnalytics(); loadLogs(1); }
-  if(name === "orders")   loadOrders("", null);
-}
+<!-- SHIPPING MODAL -->
+<div class="modal-overlay" id="modal-shipping">
+  <div class="modal">
+    <div class="modal-title" id="modal-shipping-title">&#x2795; Tambah Ongkir</div>
+    <input type="hidden" id="ship-id">
+    <div class="grid-2">
+      <div class="form-row"><label class="label">Provinsi</label><select class="select" id="ship-province"></select></div>
+      <div class="form-row"><label class="label">Kab/Kota *</label><select class="select" id="ship-city" disabled></select></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-row"><label class="label">Kecamatan</label><select class="select" id="ship-district" disabled></select></div>
+      <div class="form-row">
+        <label class="label">Ongkir *</label>
+        <input class="input" id="ship-cost" inputmode="numeric" placeholder="Otomatis dari wilayah">
+        <div class="field-hint" id="ship-cost-hint">Pilih provinsi dan kab/kota untuk estimasi otomatis.</div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-row"><label class="label">Kurir</label><input class="input" id="ship-courier" value="JNE"></div>
+      <div class="form-row"><label class="label">Layanan</label><input class="input" id="ship-service" value="REG"></div>
+    </div>
+    <div class="form-row"><label class="label">Estimasi</label><input class="input" id="ship-estimated-days" placeholder="Contoh: 4-7 hari"></div>
+    <div class="form-row"><label class="label">Catatan</label><textarea class="textarea" id="ship-notes" rows="3" placeholder="Opsional"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-shipping')">Batal</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="syncRajaOngkirRate()">Sync RajaOngkir</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveShippingRate()">&#x1F4BE; Simpan</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-function toast(msg, color) {
-  var el = document.createElement("div");
-  el.className = "toast";
-  var dot = document.createElement("span");
-  dot.style.cssText = "width:8px;height:8px;border-radius:50%;background:"+(color||"var(--teal)")+";flex-shrink:0";
-  el.appendChild(dot);
-  el.appendChild(document.createTextNode(msg));
-  document.body.appendChild(el);
-  setTimeout(function(){ el.remove(); }, 3000);
-}
-
-function openModal(id, mode) {
-  if(mode === "add") {
-    if(id === "modal-product"){
-      document.getElementById("modal-product-title").textContent = "Tambah Produk";
-      ["p-id","p-name","p-price","p-speed","p-features","p-description","p-promo","p-target","p-image-url"].forEach(function(k){ document.getElementById(k).value=""; });
-      document.getElementById("p-preview").innerHTML = "";
-    }
-    if(id === "modal-faq"){
-      document.getElementById("modal-faq-title").textContent = "Tambah FAQ";
-      ["f-id","f-question","f-answer","f-image-url"].forEach(function(k){ document.getElementById(k).value=""; });
-      document.getElementById("f-preview").innerHTML = "";
-    }
-  }
-  document.getElementById(id).classList.add("open");
-}
-function closeModal(id){ document.getElementById(id).classList.remove("open"); }
-
-// ================================================================
-// WHATSAPP
-// ================================================================
-function loadQRScript(cb){
-  if(window.QRCode){ cb(); return; }
-  var s = document.createElement("script");
-  s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-  s.onload = cb;
-  document.head.appendChild(s);
-}
-
-async function loadWAStatus(){
-  if(waStatusLoading || Date.now() < waStatusBackoffUntil) return;
-  waStatusLoading = true;
-  try{
-    var res = await fetch("/api/wa/status");
-    if(res.status === 429){
-      waStatusBackoffUntil = Date.now() + 60000;
-      document.getElementById("wa-status-label").textContent = "Status WA terlalu sering dicek";
-      document.getElementById("wa-status-sub").textContent = "Tunggu sebentar lalu coba refresh/reconnect lagi";
-      return;
-    }
-    var data = await res.json();
-    var box = document.getElementById("wa-status-big");
-    var dot = document.getElementById("sidebar-dot");
-    var lbl = document.getElementById("sidebar-status");
-    if(data.status === "connected" && data.isReady){
-      box.className = "wa-status-big connected";
-      document.getElementById("wa-status-emoji").textContent = "✅";
-      document.getElementById("wa-status-label").textContent = "WhatsApp Terhubung & Aktif";
-      document.getElementById("wa-status-sub").textContent = "AI CS siap menerima pesan";
-      document.getElementById("qr-section").style.display = "none";
-      document.getElementById("connected-info").style.display = "block";
-      dot.className = "dot connected"; lbl.textContent = "Connected"; clearInterval(qrInterval);
-    } else if(data.status === "waiting_scan" && data.hasQR){
-      box.className = "wa-status-big waiting";
-      document.getElementById("wa-status-emoji").textContent = "📷";
-      document.getElementById("wa-status-label").textContent = "Menunggu Scan QR";
-      document.getElementById("wa-status-sub").textContent = "";
-      document.getElementById("qr-section").style.display = "block";
-      document.getElementById("connected-info").style.display = "none";
-      dot.className = "dot waiting"; lbl.textContent = "Waiting QR"; showQR();
-    } else {
-      box.className = "wa-status-big disconnected";
-      document.getElementById("wa-status-emoji").textContent = "📵";
-      document.getElementById("wa-status-label").textContent = "WhatsApp Tidak Terhubung";
-      document.getElementById("wa-status-sub").textContent = "Klik Reconnect untuk menghubungkan";
-      document.getElementById("qr-section").style.display = "none";
-      document.getElementById("connected-info").style.display = "none";
-      dot.className = "dot disconnected"; lbl.textContent = "Disconnected";
-    }
-  } catch(e){
-    document.getElementById("wa-status-label").textContent = "Gagal connect ke WA Gateway";
-  } finally {
-    waStatusLoading = false;
-  }
-}
-
-async function showQR(){
-  try{
-    var data = await (await fetch("/api/wa/qr")).json();
-    if(!data.success) return;
-    loadQRScript(function(){
-      var c = document.getElementById("qr-container");
-      c.innerHTML = '<div id="qr-canvas" style="padding:16px;background:white;border-radius:12px"></div>';
-      new QRCode(document.getElementById("qr-canvas"), {text:data.qr, width:220, height:220});
-    });
-  } catch(e){}
-}
-async function reconnectWA(){
-  if(!confirm("Reconnect WhatsApp?")) return;
-  if(qrInterval) clearInterval(qrInterval);
-  waStatusBackoffUntil = 0;
-  await fetch("/api/wa/reconnect", {method:"POST"});
-  toast("Reconnecting...");
-  setTimeout(loadWAStatus, 3000);
-  qrInterval = setInterval(loadWAStatus, 5000);
-}
-async function disconnectWA(){
-  if(!confirm("Disconnect WhatsApp?")) return;
-  if(qrInterval) clearInterval(qrInterval);
-  waStatusBackoffUntil = 0;
-  await fetch("/api/wa/disconnect", {method:"POST"});
-  toast("Disconnected", "var(--red)"); loadWAStatus();
-}
-
-// ================================================================
-// PRODUCTS
-// ================================================================
-function escHtml(value){
-  return String(value == null ? "" : value)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
-}
-
-function renderMedia(url){
-  if(!url) return "";
-  var safeUrl = escHtml(url);
-  if(url.match(/\.(mp4|mov|webm)$/i)) return '<video src="'+safeUrl+'" controls style="max-height:180px;border-radius:8px;margin-top:12px;max-width:100%"></video>';
-  return '<img src="'+safeUrl+'" style="max-height:180px;border-radius:8px;margin-top:12px;cursor:pointer;max-width:100%;border:1px solid var(--border)" onclick="window.open(this.src)">';
-}
-
-function renderAnswerText(text){
-  var lines = String(text || "").split(/\n+/).map(function(line){ return line.trim(); }).filter(Boolean);
-  if(!lines.length) return "<p>-</p>";
-  var html = "";
-  var inList = false;
-  lines.forEach(function(line){
-    var bullet = line.match(/^[-*]\s+(.+)$/);
-    if(bullet){
-      if(!inList){ html += "<ul>"; inList = true; }
-      html += "<li>"+escHtml(bullet[1])+"</li>";
-    } else {
-      if(inList){ html += "</ul>"; inList = false; }
-      html += "<p>"+escHtml(line)+"</p>";
-    }
-  });
-  if(inList) html += "</ul>";
-  return html;
-}
-
-async function previewFile(inputId, previewId, hiddenId){
-  var file = document.getElementById(inputId).files[0];
-  if(!file) return;
-  var preview = document.getElementById(previewId);
-  preview.innerHTML = '<span style="color:var(--text2);font-size:12px">Uploading...</span>';
-  var fd = new FormData(); fd.append("file", file);
-  try{
-    var data = await (await fetch("/api/upload", {method:"POST", body:fd})).json();
-    if(data.success){
-      document.getElementById(hiddenId).value = data.url;
-      preview.innerHTML = renderMedia(data.url);
-    }
-  } catch(e){ preview.innerHTML = '<span style="color:var(--red)">Upload gagal</span>'; }
-}
-
-async function loadProducts(){
-  var products = await (await fetch("/api/products")).json();
-  var featureCount = products.reduce(function(sum,p){ return sum + ((p.features||[]).length || 0); }, 0);
-  document.getElementById("products-count").textContent = products.length;
-  document.getElementById("features-count").textContent = featureCount;
-  document.getElementById("products-empty").style.display = products.length ? "none" : "block";
-  var list = document.getElementById("products-list");
-  list.innerHTML = "";
-  products.forEach(function(p){
-    var div = document.createElement("div");
-    div.className = "product-item kb-card";
-    var features = p.features || [];
-    var thumb = p.image_url ? '<img src="'+escHtml(p.image_url)+'" alt="">' : "&#x1F4E6;";
-    var feats = features.length
-      ? features.map(function(f){ return '<div class="product-feature">'+escHtml(f)+'</div>'; }).join("")
-      : '<div class="kb-meta-value">Belum ada manfaat utama.</div>';
-    var meta = "";
-    if(p.speed) meta += '<div class="kb-meta"><div class="kb-meta-label">Varian/Ukuran</div><div class="kb-meta-value">'+escHtml(p.speed)+'</div></div>';
-    if(p.promo) meta += '<div class="kb-meta"><div class="kb-meta-label">Promo</div><div class="kb-meta-value">'+escHtml(p.promo)+'</div></div>';
-    if(p.target) meta += '<div class="kb-meta"><div class="kb-meta-label">Target pelanggan</div><div class="kb-meta-value">'+escHtml(p.target)+'</div></div>';
-    div.innerHTML = '<div class="kb-card-head">'
-      +'<div class="product-thumb">'+thumb+'</div>'
-      +'<div style="min-width:0">'
-      +'<div class="product-name">'+escHtml(p.name)+'</div>'
-      +'<div class="product-price">'+escHtml(p.price)+'</div>'
-      +(p.description?'<div class="product-summary">'+escHtml(p.description)+'</div>':'')
-      +'</div>'
-      +'<div class="product-actions">'
-      +'<button class="btn btn-ghost btn-xs" data-id="'+p.id+'" onclick="editProductById(this)">&#x270F;</button>'
-      +'<button class="btn btn-danger btn-xs" data-id="'+p.id+'" onclick="deleteProductById(this)">&#x1F5D1;</button>'
-      +'</div>'
-      +'</div>'
-      +'<div class="kb-card-body">'
-      +'<div class="kb-meta-label">Manfaat utama untuk jawaban CS</div>'
-      +'<div class="product-features">'+feats+'</div>'
-      +(meta?'<div class="kb-meta-grid">'+meta+'</div>':'')
-      +renderMedia(p.image_url)
-      +'</div>';
-    div._product = p;
-    list.appendChild(div);
-  });
-  return;
-  var products = await (await fetch("/api/products")).json();
-  document.getElementById("products-empty").style.display = products.length ? "none" : "block";
-  var list = document.getElementById("products-list");
-  list.innerHTML = "";
-  products.forEach(function(p){
-    var div = document.createElement("div");
-    div.className = "product-item";
-    var thumb = p.image_url ? '<img src="'+p.image_url+'">' : "📦";
-    var feats = (p.features||[]).map(function(f){ return '<span class="product-feature">'+f+'</span>'; }).join("");
-    div.innerHTML = '<div class="product-thumb">'+thumb+'</div>'
-      +'<div style="flex:1;min-width:0">'
-      +'<div class="product-name">'+p.name+'</div>'
-      +'<div class="product-price">'+p.price+' <span style="color:var(--text3);font-weight:400">'+(p.speed||"")+'</span></div>'
-      +'<div class="product-features">'+feats+'</div>'
-      +(p.promo?'<div style="color:var(--amber);font-size:12px;margin-top:6px">🎁 '+p.promo+'</div>':"")
-      +renderMedia(p.image_url)
-      +'</div>'
-      +'<div class="product-actions">'
-      +'<button class="btn btn-ghost btn-xs" data-id="'+p.id+'" onclick="editProductById(this)">✏️</button>'
-      +'<button class="btn btn-danger btn-xs" data-id="'+p.id+'" onclick="deleteProductById(this)">🗑️</button>'
-      +'</div>';
-    div._product = p;
-    list.appendChild(div);
-  });
-}
-
-function editProductById(btn){
-  var p = btn.closest(".product-item")._product;
-  document.getElementById("modal-product-title").textContent = "Edit Produk";
-  document.getElementById("p-id").value = p.id;
-  document.getElementById("p-name").value = p.name;
-  document.getElementById("p-price").value = p.price;
-  document.getElementById("p-speed").value = p.speed||"";
-  document.getElementById("p-features").value = (p.features||[]).join("\n");
-  document.getElementById("p-description").value = p.description||"";
-  document.getElementById("p-promo").value = p.promo||"";
-  document.getElementById("p-target").value = p.target||"";
-  document.getElementById("p-image-url").value = p.image_url||"";
-  document.getElementById("p-preview").innerHTML = p.image_url ? renderMedia(p.image_url) : "";
-  openModal("modal-product");
-}
-async function deleteProductById(btn){
-  if(!confirm("Hapus produk?")) return;
-  var id = btn.dataset.id;
-  await fetch("/api/products/"+id, {method:"DELETE"});
-  loadProducts(); toast("Dihapus", "var(--red)");
-}
-async function saveProduct(){
-  var id = document.getElementById("p-id").value;
-  var data = {
-    name: document.getElementById("p-name").value,
-    price: document.getElementById("p-price").value,
-    speed: document.getElementById("p-speed").value,
-    features: document.getElementById("p-features").value.split("\n").filter(function(f){ return f.trim(); }),
-    description: document.getElementById("p-description").value,
-    promo: document.getElementById("p-promo").value,
-    target: document.getElementById("p-target").value,
-    image_url: document.getElementById("p-image-url").value
-  };
-  await fetch(id ? "/api/products/"+id : "/api/products", {method:id?"PUT":"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)});
-  closeModal("modal-product"); loadProducts(); toast("Produk disimpan!");
-}
-
-// ================================================================
-// FAQs
-// ================================================================
-async function loadFAQs(){
-  var faqs = await (await fetch("/api/faqs")).json();
-  document.getElementById("faqs-count").textContent = faqs.length;
-  document.getElementById("faqs-empty").style.display = faqs.length ? "none" : "block";
-  var list = document.getElementById("faqs-list");
-  list.innerHTML = "";
-  faqs.forEach(function(f){
-    var div = document.createElement("div");
-    div.className = "faq-card";
-    div.innerHTML = '<div class="faq-head">'
-      +'<div style="min-width:0">'
-      +'<span class="faq-source">Baseline FAQ</span>'
-      +'<div class="faq-question">'+escHtml(f.question)+'</div>'
-      +'</div>'
-      +'<div class="product-actions">'
-      +'<button class="btn btn-ghost btn-xs" data-id="'+f.id+'" onclick="editFaqById(this)">&#x270F;</button>'
-      +'<button class="btn btn-danger btn-xs" data-id="'+f.id+'" onclick="deleteFaqById(this)">&#x1F5D1;</button>'
-      +'</div>'
-      +'</div>'
-      +'<div class="faq-answer">'+renderAnswerText(f.answer)+renderMedia(f.image_url)+'</div>';
-    div._faq = f;
-    list.appendChild(div);
-  });
-  return;
-  var faqs = await (await fetch("/api/faqs")).json();
-  document.getElementById("faqs-empty").style.display = faqs.length ? "none" : "block";
-  var list = document.getElementById("faqs-list");
-  list.innerHTML = "";
-  faqs.forEach(function(f){
-    var div = document.createElement("div");
-    div.className = "product-item";
-    div.innerHTML = '<div style="flex:1;min-width:0">'
-      +'<div class="product-name">❓ '+f.question+'</div>'
-      +'<div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5">'+f.answer+'</div>'
-      +renderMedia(f.image_url)
-      +'</div>'
-      +'<div class="product-actions">'
-      +'<button class="btn btn-ghost btn-xs" data-id="'+f.id+'" onclick="editFaqById(this)">✏️</button>'
-      +'<button class="btn btn-danger btn-xs" data-id="'+f.id+'" onclick="deleteFaqById(this)">🗑️</button>'
-      +'</div>';
-    div._faq = f;
-    list.appendChild(div);
-  });
-}
-function editFaqById(btn){
-  var f = btn.closest(".faq-card")._faq;
-  document.getElementById("modal-faq-title").textContent = "Edit FAQ";
-  document.getElementById("f-id").value = f.id;
-  document.getElementById("f-question").value = f.question;
-  document.getElementById("f-answer").value = f.answer;
-  document.getElementById("f-image-url").value = f.image_url||"";
-  document.getElementById("f-preview").innerHTML = f.image_url ? renderMedia(f.image_url) : "";
-  openModal("modal-faq");
-}
-async function deleteFaqById(btn){
-  if(!confirm("Hapus FAQ?")) return;
-  await fetch("/api/faqs/"+btn.dataset.id, {method:"DELETE"});
-  loadFAQs(); toast("Dihapus", "var(--red)");
-}
-async function saveFaq(){
-  var id = document.getElementById("f-id").value;
-  var data = {question:document.getElementById("f-question").value, answer:document.getElementById("f-answer").value, image_url:document.getElementById("f-image-url").value};
-  await fetch(id?"/api/faqs/"+id:"/api/faqs", {method:id?"PUT":"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)});
-  closeModal("modal-faq"); loadFAQs(); toast("FAQ disimpan!");
-}
-
-// ================================================================
-// TEST AI
-// ================================================================
-var agentLabels = {greeting_agent:"👋 Greeting", product_agent:"📦 Product", order_agent:"🛒 Order", escalation_agent:"🆘 Escalation", cancel_agent:"❌ Cancel"};
-agentLabels.male_health_consultant_agent = "Konsultan Pria";
-function clearChat(){
-  chatHistory = [];
-  document.getElementById("chat").innerHTML = '<div style="text-align:center;color:var(--text3);font-size:12px;margin:auto">Mulai percakapan...</div>';
-  document.getElementById("agent-badge").style.display = "none";
-}
-async function sendMsg(){
-  var msg = document.getElementById("msg").value.trim();
-  if(!msg) return;
-  document.getElementById("msg").value = "";
-  var chat = document.getElementById("chat");
-  if(chat.querySelector("[style*=Mulai]")) chat.innerHTML = "";
-  var userDiv = document.createElement("div"); userDiv.className = "chat-msg user";
-  var bubble = document.createElement("div"); bubble.className = "chat-bubble"; bubble.textContent = msg;
-  userDiv.appendChild(bubble); chat.appendChild(userDiv);
-  var typingDiv = document.createElement("div"); typingDiv.id = "typing"; typingDiv.className = "chat-msg ai";
-  var tb = document.createElement("div"); tb.className = "chat-bubble"; tb.style.color = "var(--text3)"; tb.textContent = "...";
-  typingDiv.appendChild(tb); chat.appendChild(typingDiv);
-  chat.scrollTop = chat.scrollHeight;
-  try{
-    var res = await fetch("/api/chat-proxy", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({content:msg, history:chatHistory})});
-    var data = await res.json();
-    var t = document.getElementById("typing"); if(t) t.remove();
-    if(!res.ok || data.error) throw new Error(data.error || ("HTTP "+res.status));
-    var reply = data.reply || (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
-    if(!reply) throw new Error("Response AI kosong/tidak valid");
-    var agent = (data._meta && data._meta.agent) || "";
-    var intent = (data._meta && data._meta.intent) || "";
-    chatHistory.push({role:"user",content:msg}); chatHistory.push({role:"assistant",content:reply});
-    var aiDiv = document.createElement("div"); aiDiv.className = "chat-msg ai";
-    var ab = document.createElement("div"); ab.className = "chat-bubble"; ab.textContent = reply;
-    aiDiv.appendChild(ab);
-    if(agent){ var ag = document.createElement("div"); ag.className = "chat-agent"; ag.textContent = (agentLabels[agent]||agent)+" · "+intent; aiDiv.appendChild(ag); }
-    chat.appendChild(aiDiv);
-    if(agent){ var badge = document.getElementById("agent-badge"); badge.textContent = (agentLabels[agent]||agent)+" · "+intent; badge.style.display = "inline-flex"; }
-  } catch(e){
-    var t = document.getElementById("typing"); if(t) t.remove();
-    var errDiv = document.createElement("div"); errDiv.className = "chat-msg ai";
-    var eb = document.createElement("div"); eb.className = "chat-bubble"; eb.style.color = "var(--red)"; eb.textContent = "Error: "+e.message;
-    errDiv.appendChild(eb); chat.appendChild(errDiv);
-  }
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// ================================================================
-// PROMPTS
-// ================================================================
-async function loadPrompts(){
-  var s = await (await fetch("/api/settings")).json();
-  document.getElementById("prompt-greeting").value = s.prompt_greeting||"";
-  document.getElementById("prompt-product").value = s.prompt_product||"";
-  document.getElementById("prompt-order").value = s.prompt_order||"";
-  document.getElementById("prompt-escalation").value = s.prompt_escalation||"";
-}
-async function savePrompts(){
-  await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
-    prompt_greeting: document.getElementById("prompt-greeting").value,
-    prompt_product:  document.getElementById("prompt-product").value,
-    prompt_order:    document.getElementById("prompt-order").value,
-    prompt_escalation: document.getElementById("prompt-escalation").value
-  })});
-  toast("Prompts disimpan!");
-}
-
-// ================================================================
-// SETTINGS
-// ================================================================
-async function loadSettings(){
-  var s = await (await fetch("/api/settings")).json();
-  document.getElementById("s-name").value = s.company_name||"";
-  document.getElementById("s-location").value = s.company_location||"";
-  document.getElementById("s-hours").value = s.company_hours||"";
-  document.getElementById("s-contact").value = s.company_contact||"";
-  document.getElementById("s-provider").value = s.llm_provider||"openrouter";
-  document.getElementById("s-api-url").value = s.llm_api_url||"https://openrouter.ai/api/v1/chat/completions";
-  document.getElementById("s-model").value = s.ai_model||"qwen/qwen3-32b:free";
-  document.getElementById("s-apikey").value = s.llm_api_key||s.groq_api_key||"";
-  document.getElementById("s-temp").value = s.ai_temperature||"0.7";
-  document.getElementById("s-tokens").value = s.ai_max_tokens||"500";
-  document.getElementById("s-tg-token").value = s.telegram_bot_token||"";
-}
-async function saveSettings(){
-  await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
-    company_name: document.getElementById("s-name").value,
-    company_location: document.getElementById("s-location").value,
-    company_hours: document.getElementById("s-hours").value,
-    company_contact: document.getElementById("s-contact").value,
-    llm_provider: document.getElementById("s-provider").value,
-    llm_api_url: document.getElementById("s-api-url").value,
-    llm_api_key: document.getElementById("s-apikey").value,
-    ai_model: document.getElementById("s-model").value,
-    groq_api_key: document.getElementById("s-apikey").value,
-    ai_temperature: document.getElementById("s-temp").value,
-    ai_max_tokens: document.getElementById("s-tokens").value
-  })});
-  toast("Settings disimpan!");
-}
-async function saveTgToken(){
-  await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({telegram_bot_token: document.getElementById("s-tg-token").value})});
-  toast("Token disimpan!");
-}
-async function setTelegramWebhook(){
-  var token = document.getElementById("s-tg-token").value.trim();
-  if(!token){ toast("Isi token dulu!", "var(--red)"); return; }
-  await saveTgToken();
-  var res = await (await fetch("/api/telegram-set-webhook", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({})})).json();
-  if(res.success) toast("Webhook berhasil diset!"); else toast("Error: "+res.error, "var(--red)");
-}
-async function loadTgUsers(){
-  try{
-    var users = await (await fetch("/api/telegram-users")).json();
-    var el = document.getElementById("tg-users-list");
-    if(!users.length){ el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:12px 0">Belum ada user terdaftar</div>'; return; }
-    el.innerHTML = "";
-    users.forEach(function(u){
-      var div = document.createElement("div");
-      div.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)";
-      div.innerHTML = '<div><div style="font-weight:600;font-size:13px">'+u.name+'</div><div style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--text2)">'+u.chat_id+'</div></div>';
-      var btn = document.createElement("button");
-      btn.className = "del-btn"; btn.textContent = "✕";
-      btn.setAttribute("data-uid", u.id);
-      btn.onclick = function(){ deleteTgUser(parseInt(this.dataset.uid)); };
-      div.appendChild(btn); el.appendChild(div);
-    });
-  } catch(e){}
-}
-async function openAddTgUser(){
-  var chatId = prompt("Chat ID Telegram:"); if(!chatId) return;
-  var name = prompt("Nama CS:"); if(!name) return;
-  var res = await (await fetch("/api/telegram-users", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({chat_id:chatId.trim(), name:name.trim()})})).json();
-  if(res.success){ toast("User ditambahkan!"); loadTgUsers(); } else toast("Error: "+res.error, "var(--red)");
-}
-async function deleteTgUser(id){
-  if(!confirm("Hapus user ini?")) return;
-  await fetch("/api/telegram-users/"+id, {method:"DELETE"});
-  loadTgUsers(); toast("Dihapus", "var(--red)");
-}
-
-function cleanWaNumberInput(){
-  var num = (document.getElementById("reset-memory-number").value || "").replace(/\D/g, "");
-  if(num.startsWith("0")) return "62" + num.slice(1);
-  if(num.startsWith("8")) return "62" + num;
-  return num;
-}
-async function checkCustomerMemory(){
-  var num = cleanWaNumberInput();
-  var out = document.getElementById("memory-reset-result");
-  if(!num){ toast("Isi nomor WA dulu", "var(--red)"); return; }
-  try{
-    var data = await (await fetch("/api/customer-profile/"+num)).json();
-    var history = [];
-    try{
-      history = await (await fetch("/api/conversation/history/"+num+"?limit=5")).json();
-      if(!Array.isArray(history)) history = [];
-    }catch(_e){}
-    var keys = data.profile ? Object.keys(data.profile) : [];
-    var summary = data.summary || "";
-    var parts = [];
-    if(keys.length) parts.push("Profile: " + keys.join(", "));
-    if(summary) parts.push("Summary: " + summary);
-    if(history.length) parts.push("History terakhir: " + history.length + " pesan");
-    out.textContent = parts.length
-      ? "Memory ditemukan. " + parts.join(" | ")
-      : "Tidak ada profile/summary permanent atau history untuk nomor ini.";
-  } catch(e){
-    out.textContent = "Gagal cek memory.";
-  }
-}
-async function resetCustomerMemory(){
-  var num = cleanWaNumberInput();
-  var out = document.getElementById("memory-reset-result");
-  if(!num){ toast("Isi nomor WA dulu", "var(--red)"); return; }
-  if(!confirm("Reset history chat dan memory permanent untuk "+num+"?")) return;
-  try{
-    var res = await fetch("/api/customer-memory/"+num, {method:"DELETE"});
-    var data = await res.json();
-    if(!data.success) throw new Error(data.error || "Reset gagal");
-    out.textContent = "Reset berhasil. History terhapus: "+data.history_deleted+", profile terhapus: "+data.profile_deleted+".";
-    toast("Memory customer di-reset");
-  } catch(e){
-    out.textContent = "Gagal reset: " + e.message;
-    toast("Gagal reset memory", "var(--red)");
-  }
-}
-
-// ================================================================
-// ORDERS
-// ================================================================
-async function loadOrders(status, tabEl){
-  if(tabEl){
-    document.querySelectorAll("#section-orders .filter-tab").forEach(function(t){ t.classList.remove("active"); });
-    tabEl.classList.add("active");
-  }
-  var url = status ? "/api/orders?status="+status : "/api/orders";
-  var orders = await (await fetch(url)).json();
-  var nc = orders.filter(function(o){ return o.status === "new"; }).length;
-  var b = document.getElementById("new-order-count"); b.textContent = nc; b.style.display = nc?"inline":"none";
-  document.getElementById("orders-empty").style.display = orders.length ? "none" : "block";
-  var list = document.getElementById("orders-list");
-  list.innerHTML = "";
-  orders.forEach(function(o){
-    var statusBadges = {new:'<span class="badge badge-blue">Baru</span>', process:'<span class="badge badge-amber">Proses</span>', done:'<span class="badge badge-green">Selesai</span>', cancelled:'<span class="badge badge-red">Batal</span>'};
-    var div = document.createElement("div");
-    div.className = "order-card";
-    div.innerHTML = '<div class="order-header">'
-      +'<div><span class="order-id">#'+o.id+'</span><span style="font-size:13px;font-weight:600;margin-left:10px">'+(o.user_name||"Unknown")+'</span></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3)">'+o.timestamp+'</span>'+(statusBadges[o.status]||"")+'</div>'
-      +'</div>'
-      +'<div class="order-grid">'
-      +'<div class="order-field"><div class="order-field-label">WA</div><div class="order-field-value" style="font-size:12px">'+o.user_number+'</div></div>'
-      +'<div class="order-field"><div class="order-field-label">HP</div><div class="order-field-value">'+(o.phone||"-")+'</div></div>'
-      +'<div class="order-field"><div class="order-field-label">Produk</div><div class="order-field-value">'+(o.product||"-")+' x'+(o.quantity||1)+'<br><span style="color:var(--teal);font-weight:700">'+(o.total||"-")+'</span></div></div>'
-      +'<div class="order-field"><div class="order-field-label">Alamat</div><div class="order-field-value" style="font-size:12px">'+(o.address||"-")+'</div></div>'
-      +'</div>'
-      +(o.notes?'<div style="background:var(--amber-dim);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;color:var(--amber)">'+o.notes+'</div>':"")
-      +'<div class="order-actions" id="oa-'+o.id+'"></div>';
-    list.appendChild(div);
-    var actions = document.getElementById("oa-"+o.id);
-    [["new","btn-ghost","Baru"],["process","btn-ghost","Proses"],["done","btn-ghost","Selesai"],["cancelled","btn-danger","Batal"]].forEach(function(s){
-      var btn = document.createElement("button");
-      btn.className = "btn "+s[1]+" btn-xs"; btn.textContent = s[2];
-      btn.setAttribute("data-oid", o.id); btn.setAttribute("data-st", s[0]);
-      btn.onclick = function(){ updateOrder(parseInt(this.dataset.oid), this.dataset.st); };
-      actions.appendChild(btn);
-    });
-    var delBtn = document.createElement("button");
-    delBtn.className = "btn btn-danger btn-xs"; delBtn.textContent = "Hapus"; delBtn.style.marginLeft = "auto";
-    delBtn.setAttribute("data-oid", o.id);
-    delBtn.onclick = function(){ deleteOrder(parseInt(this.dataset.oid)); };
-    actions.appendChild(delBtn);
-  });
-}
-async function updateOrder(id, status){
-  await fetch("/api/orders/"+id, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status:status})});
-  loadOrders("", null); toast("Status diperbarui");
-}
-async function deleteOrder(id){
-  if(!confirm("Hapus order?")) return;
-  await fetch("/api/orders/"+id, {method:"DELETE"});
-  loadOrders("", null); toast("Dihapus", "var(--red)");
-}
-
-// ================================================================
-// ANALYTICS & LOGS
-// ================================================================
-async function loadAnalytics(){
-  try{
-    var data = await (await fetch("/api/analytics")).json();
-    document.getElementById("stat-total").textContent = data.total;
-    document.getElementById("stat-today").textContent = data.today;
-    document.getElementById("stat-users").textContent = data.unique_users;
-    var medals = ["🥇","🥈","🥉","4️⃣","5️⃣"];
-    var el = document.getElementById("top-users");
-    if(!data.top_users.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Belum ada data</div>'; return; }
-    el.innerHTML = "";
-    data.top_users.forEach(function(u,i){
-      var div = document.createElement("div");
-      div.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)";
-      div.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><span>'+medals[i]+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px">'+u.number+'</span></div><span class="badge badge-teal">'+u.count+' pesan</span>';
-      el.appendChild(div);
-    });
-  } catch(e){}
-}
-
-async function loadLogs(page){
-  page = page||1;
-  try{
-    var data = await (await fetch("/api/logs?page="+page)).json();
-    var el = document.getElementById("logs-list");
-    if(!data.logs.length){ el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:32px">Belum ada percakapan</div>'; return; }
-    el.innerHTML = "";
-    data.logs.forEach(function(log){
-      var div = document.createElement("div"); div.className = "log-card";
-      div.innerHTML = '<div class="log-header"><span class="log-number">'+log.user_number+'</span><span class="log-time">'+log.timestamp+'</span></div>'
-        +'<div class="log-message log-user">'+log.user_message+'</div>'
-        +'<div class="log-message log-ai">'+log.ai_response+'</div>';
-      el.appendChild(div);
-    });
-    var total = Math.ceil(data.total/20);
-    var pg = document.getElementById("pagination"); pg.innerHTML = "";
-    if(total > 1){
-      for(var i=1;i<=total;i++){
-        var btn = document.createElement("button");
-        btn.className = "page-btn" + (i===page?" active":"");
-        btn.textContent = i;
-        btn.setAttribute("data-pg", i);
-        btn.onclick = function(){ loadLogs(parseInt(this.dataset.pg)); };
-        pg.appendChild(btn);
-      }
-    }
-  } catch(e){}
-}
-
-// ================================================================
-// INIT
-// ================================================================
-showSection("whatsapp");
-setInterval(loadWAStatus, 30000);
-</script>
-</body>
-</html>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/utils/state.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/api.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/navigation.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/whatsapp.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/utils/render.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/products.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/faqs.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/testimonials.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/cs_templates.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/test-ai.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/prompts.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/settings.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/orders.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/finance.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/shipping.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/analytics.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ static_version }}"></script>
+{% endblock %}

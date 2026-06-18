@@ -3,3 +3,4 @@ flask-limiter
 waitress
 requests
 python-dotenv
+openpyxl

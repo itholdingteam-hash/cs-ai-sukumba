@@ -17,6 +17,7 @@ import os
 import re
 import logging
 import html
+import sys
 
 # ------------------------------------------------------------------
 # 0. ENVIRONMENT SETUP
@@ -24,54 +25,88 @@ import html
 from dotenv import load_dotenv
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SERVICE_VERSION = "v6.10-consult-history-slot-recovery"
+from sukumba_core.config import load_service_config
+from sukumba_core import consultation_helpers
+from sukumba_core.deterministic_replies import ProductReplyDeps
+from sukumba_core import deterministic_replies
+from sukumba_core import order_helpers
+from sukumba_core import product_helpers
+from sukumba_core import state_helpers
+from sukumba_core.patterns import (
+    CONSULT_QUESTION_IDS,
+    CONSULTATION_PATTERNS,
+    GENERAL_HEALTH_PATTERNS,
+    MALE_HEALTH_PATTERNS,
+    MALE_VITALITY_TERMS,
+    ORDER_PATTERNS,
+    RED_FLAG_PATTERNS,
+    SHORT_CONFIRM_WORDS,
+    SHORT_REACTION_WORDS,
+)
+from sukumba_core.persona import SUKUMBA_PERSONA_CONTRACT as CORE_PERSONA_CONTRACT
+from sukumba_core.security import sanitize_input as sanitize_customer_input
+from sukumba_core.state_helpers import (
+    infer_question_id_from_reply,
+    product_context_updates,
+    state_from_question_id,
+    state_updates_for_reply,
+)
+from sukumba_core.state_router import StateRouterDeps, route_state_precheck
+from sukumba_core.syifa_router import SyifaRouterDeps, route_syifa_template
+from sukumba_core.template_service import TemplateService, greeting_label_for_message
+from sukumba_core.template_store import DynamicTemplateStore
 
-SUKUMBA_PERSONA_CONTRACT = """
-KONTRAK PERSONA WAJIB - SUKUMBA:
-- Identitas: kamu CS Sukumba, bukan assistant virtual, bukan bot, bukan konsultan umum, bukan Product Specialist generik.
-- Panggil customer "Kak"; boleh pakai nama customer kalau sudah diketahui.
-- Hindari panggilan "kamu/Anda" ke customer; utamakan "Kak" atau "Kakak".
-- Bahasa Indonesia santai, manusiawi, sopan, pendek, dan natural seperti CS WhatsApp.
-- Jangan pernah menyebut "assistant virtual", "AI", "sistem", "knowledge base", "Product Specialist", atau "[Nama Perusahaan/Brand]".
-- Jangan greeting ulang di tengah percakapan. Tanggapi pesan terakhir sesuai konteks.
-- Jangan langsung jualan. Untuk konsultasi, gali kondisi dulu; jualan hanya setelah konteks cukup atau customer jelas ingin beli.
-- Jangan menyimpulkan keluhan spesifik yang belum customer sebut. Sampai jelas, pakai bahasa netral seperti "keluhan" atau "tujuan konsultasi".
-- Pahami slang pria seperti "burung loyo" sebagai konteks vitalitas/ereksi pria, tetapi balas dengan bahasa elegan.
-- Jangan overclaim. Hindari: menyembuhkan, pasti sembuh, dijamin keras, obat kuat, impoten sembuh total.
-- Boleh gunakan: membantu stamina, energi, vitalitas, pemulihan tubuh, dan kondisi tubuh lebih prima.
-- Produk utama: Sukumba, susu kuda Sumbawa/herbal untuk stamina, energi, daya tahan tubuh, dan vitalitas.
-- Aturan konsumsi resmi: 2x sehari sesudah makan.
-- Maksimal 2-3 kalimat kecuali sedang minta data order.
-"""
+CONFIG = load_service_config()
+BASE_DIR = CONFIG.base_dir
+SERVICE_VERSION = CONFIG.service_version
 
+SUKUMBA_PERSONA_CONTRACT = CORE_PERSONA_CONTRACT
 CS_TONE_GUIDE = SUKUMBA_PERSONA_CONTRACT
 
-DEFAULT_LLM_API_URL = os.getenv('LLM_API_URL', os.getenv('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions'))
-ADMIN_API    = os.getenv('ADMIN_URL', 'http://172.31.6.3:5001') + "/api/public/settings"
-PRODUCTS_API = os.getenv('ADMIN_URL', 'http://172.31.6.3:5001') + "/api/public/products"
-FAQS_API     = os.getenv('ADMIN_URL', 'http://172.31.6.3:5001') + "/api/public/faqs"
+DEFAULT_LLM_API_URL = CONFIG.default_llm_api_url
+ADMIN_API = CONFIG.admin_api
+PRODUCTS_API = CONFIG.products_api
+FAQS_API = CONFIG.faqs_api
+CS_TEMPLATES_API = CONFIG.cs_templates_api
 
-GROQ_API_KEY     = os.getenv('GROQ_API_KEY', '')
-LLM_API_KEY      = os.getenv('LLM_API_KEY', os.getenv('OPENROUTER_API_KEY', GROQ_API_KEY))
-INTERNAL_API_KEY = os.getenv('INTERNAL_API_KEY', '')
+GROQ_API_KEY = CONFIG.groq_api_key
+LLM_API_KEY = CONFIG.llm_api_key
+INTERNAL_API_KEY = CONFIG.internal_api_key
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID   = os.getenv('TELEGRAM_CHAT_ID', '1907277531')
-TELEGRAM_API       = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+TELEGRAM_BOT_TOKEN = CONFIG.telegram_bot_token
+TELEGRAM_CHAT_ID = CONFIG.telegram_chat_id
+TELEGRAM_API = CONFIG.telegram_api
 
 # ------------------------------------------------------------------
 # 1. LOGGING
 # ------------------------------------------------------------------
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, 'reconfigure'):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(BASE_DIR, 'ai_service.log')),
+        logging.FileHandler(os.path.join(BASE_DIR, 'ai_service.log'), encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
+
+def log_preview(value, limit=80):
+    text = str(value or '')[:limit]
+    return text.encode('ascii', errors='backslashreplace').decode('ascii')
+
+dynamic_templates = DynamicTemplateStore(
+    CS_TEMPLATES_API,
+    internal_api_key=INTERNAL_API_KEY,
+    logger=logger,
+)
+template_service = TemplateService(dynamic_templates)
 
 # ------------------------------------------------------------------
 # 2. FLASK APP
@@ -81,23 +116,6 @@ app = Flask(__name__)
 # ------------------------------------------------------------------
 # 3. SECURITY HELPERS
 # ------------------------------------------------------------------
-# Patterns untuk deteksi prompt injection
-INJECTION_PATTERNS = [
-    r'ignore\s+(all\s+)?previous\s+(instructions?|prompts?)',
-    r'forget\s+(everything|all)\s+(you\s+)?(know|learned)',
-    r'you\s+are\s+now\s+',
-    r'system\s*:\s*',
-    r'user\s*:\s*assistant\s*:',
-    r'<<<\s*SYS\s*>>>',
-    r'\[system\s*override\]',
-    r'ignore\s+above',
-    r'disregard\s+all',
-    r'new\s+instructions?:',
-    r'prompt\s*:\s*',
-    r'you\s+are\s+a\s+helpful',
-    r'act\s+as\s+',
-]
-
 def sanitize_input(text):
     """
     Sanitasi input user sebelum dikirim ke LLM.
@@ -105,75 +123,7 @@ def sanitize_input(text):
     - Deteksi prompt injection patterns
     - Truncate jika terlalu panjang
     """
-    if not isinstance(text, str):
-        text = str(text)
-    
-    # Truncate panjang maksimal 2000 karakter
-    text = text[:2000]
-    
-    # Escape HTML entities untuk mencegah XSS via LLM response
-    text = html.escape(text)
-    
-    # Deteksi prompt injection
-    lower = text.lower()
-    for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, lower, re.IGNORECASE):
-            logger.warning(f"Prompt injection detected: {pattern}")
-            # Ganti dengan pesan aman, tidak reject karena bisa false positive
-            text = re.sub(pattern, '[removed]', text, flags=re.IGNORECASE)
-    
-    return text
-
-MALE_HEALTH_PATTERNS = [
-    r'\bburung\b', r'\bmr\.?\s*p\b', r'\balat\s+vital\b', r'\bkejantanan\b',
-    r'\bkekuatan\s+pria\b', r'\btenaga\s+pria\b', r'\bperforma\s+pria\b',
-    r'\bereksi\b', r'\bkurang\s+keras\b', r'\btidak\s+keras\b', r'\bgak\s+keras\b',
-    r'\bloyo\b', r'\bletoy\b', r'\blemes\b', r'\bstamina\s+(pria|ranjang|hubungan)\b',
-    r'\bvitalitas\b', r'\bgairah\b', r'\blibido\b', r'\bcepat\s+keluar\b',
-    r'\bcepet\s+keluar\b', r'\bejakulasi\b', r'\btahan\s+lama\b',
-    r'\bhubungan\s+(suami\s+istri|intim)\b', r'\branjang\b',
-    r'\bgreng\b', r'\bjoss\b', r'\bjos\b', r'\bperkasa\b',
-    r'\bfit\s+lagi\b', r'\bkembali\s+fit\b',
-]
-
-GENERAL_HEALTH_PATTERNS = [
-    r'\bmual\b', r'\bpusing\b', r'\bsakit\s+kepala\b', r'\bbegadang\b',
-    r'\bkurang\s+tidur\b', r'\bsusah\s+tidur\b', r'\btensi\b',
-    r'\bhipertensi\b', r'\bdarah\s+tinggi\b', r'\blelah\b', r'\bcapek\b',
-    r'\bkurang\s+tenaga\b',
-]
-
-MALE_VITALITY_TERMS = [
-    'burung', 'mr p', 'alat vital', 'kejantanan', 'kekuatan pria',
-    'tenaga pria', 'performa pria', 'ereksi', 'kurang keras',
-    'gak keras', 'tidak keras', 'loyo', 'letoy', 'vitalitas', 'gairah',
-    'libido', 'cepat keluar', 'cepet keluar', 'ejakulasi', 'tahan lama',
-    'ranjang', 'greng', 'joss', 'jos', 'perkasa'
-]
-
-SHORT_CONFIRM_WORDS = {'ya', 'iya', 'ok', 'oke', 'baik', 'siap', 'sip', 'boleh', 'lanjut'}
-SHORT_REACTION_WORDS = {'oiya', 'oh ya', 'oh', 'ooh', 'serius', 'masa', 'bener', 'kok gitu', 'gimana', 'maksudnya', 'terus'}
-CONSULT_QUESTION_IDS = {'ask_complaint', 'ask_age_duration', 'ask_risk_factors', 'ask_lifestyle', 'ask_bp'}
-
-CONSULTATION_PATTERNS = [
-    r'\bkonsultasi\b', r'\bconsul\b', r'\bkonsul\b', r'\bkonsult\b', r'\bkosult\b', r'\bmau\s+tanya\b',
-    r'\bboleh\s+tanya\b', r'\bmau\s+cerita\b', r'\bcurhat\b',
-    r'\bada\s+keluhan\b', r'\bkeluhan\b',
-]
-
-ORDER_PATTERNS = [
-    r'\bmau\s+(beli|pesan|pesen|order)\b', r'\bjadi\s+(beli|pesan|pesen|order)\b',
-    r'\blangsung\s+(beli|pesan|pesen|order|checkout|co)\b',
-    r'\bambil\s+\d+\s*(box|botol|pcs)?\b', r'\border\s+sekarang\b',
-    r'\bcara\s+(beli|pesan|pesen|order|pemesanan)\b',
-    r'\b(beli|pesan|pesen|order|pemesanan)\s+(gimana|bagaimana|gmn|gmna|caranya)\b',
-]
-
-RED_FLAG_PATTERNS = [
-    r'nyeri\s+dada', r'sakit\s+dada', r'obat\s+jantung', r'nitrat', r'isosorbid',
-    r'ereksi[^.?!]{0,40}(4|empat)\s+jam', r'jantung\s+koroner',
-    r'stroke', r'pingsan', r'sesak\s+napas', r'nyeri\s+berat',
-]
+    return sanitize_customer_input(text, logger=logger)
 
 def has_pattern(text, patterns):
     lower = html.unescape(str(text or '')).lower()
@@ -187,6 +137,24 @@ def has_general_health_signal(text):
 
 def is_consultation_request(text):
     return has_pattern(text, CONSULTATION_PATTERNS)
+
+def is_open_question_request(text):
+    lower = html.unescape(str(text or '')).lower().strip()
+    lower = re.sub(r'[.!?]+$', '', lower)
+    lower = re.sub(r'\b(kak|kakak|min|admin|cs|ya|yah|dulu|dl|aja|dong|nih|sih)\b', ' ', lower)
+    lower = re.sub(r'\s+', ' ', lower).strip()
+    if not re.fullmatch(r'(mau|mo|boleh|izin|ijin)?\s*(tanya|nanya|bertanya)', lower):
+        return False
+    return not (
+        is_product_question(text)
+        or is_explicit_order_request(text)
+        or has_male_health_signal(text)
+        or has_general_health_signal(text)
+        or re.search(r'\b(harga|promo|paket|ongkir|cod|transfer|bpom|halal|komposisi|aturan|minum|cara|manfaat|khasiat|produk|keluhan|stamina|vitalitas|ereksi|pusing|mual|tensi)\b', html.unescape(str(text or '')).lower())
+    )
+
+def open_question_reply():
+    return "Boleh Kak, mau tanya soal apa dulu? Bisa tentang produk Sukumba, manfaat, aturan minum, harga, atau konsultasi keluhan."
 
 def is_explicit_order_request(text):
     lower = html.unescape(str(text or '')).lower().strip()
@@ -204,15 +172,17 @@ def is_explicit_order_request(text):
 def is_offer_acceptance(text, history):
     lower = html.unescape(str(text or '')).lower().strip()
     lower = re.sub(r'[.!?]+$', '', lower)
+    lower = re.sub(r'\b(kak|ya|yah)\b', '', lower)
+    lower = re.sub(r'\s+', ' ', lower).strip()
     accepted = (
-        lower in ['ok coba', 'oke coba', 'iya coba', 'ya coba', 'boleh coba', 'saya coba', 'coba kak', 'coba dulu', 'boleh', 'ok', 'oke', 'ya', 'iya', 'ya beli', 'iya beli', 'ok beli', 'oke beli']
+        lower in ['ok coba', 'oke coba', 'iya coba', 'ya coba', 'boleh coba', 'saya coba', 'coba', 'coba dulu', 'boleh', 'ok', 'oke', 'ya', 'iya', 'lanjut', 'siap', 'ya beli', 'iya beli', 'ok beli', 'oke beli']
         or re.search(r'\b(coba|boleh|ok|oke|iya|ya)\b.*\b(sukumba|produk|paket|beli|pesan|order)\b', lower)
     )
     if not accepted:
         return False
     for h in reversed(history[-8:]):
         if h.get('role') == 'assistant' and re.search(
-            r'mau\s+saya\s+bantu\s+(order|pesan|pemesanan)|saya\s+bantu\s+(order|pesan|pemesanan)|bisa\s+bantu\s+proses|lanjut\s+(order|pesan)|proses\s+(order|pesanan|pemesanan)|boleh\s+nama\s+penerima|siap.*(mencoba|membeli|beli)|mau\s+(order|pesan|beli)|ingin\s+(order|pesan|beli|memesan)',
+            r'mau\s+saya\s+bantu\s+(order|pesan|pemesanan)|saya\s+bantu\s+(order|pesan|pemesanan)|bisa\s+bantu\s+proses|lanjut\s+(order|pesan)|proses\s+(order|pesanan|pemesanan)|boleh\s+nama\s+penerima|siap.*(mencoba|membeli|beli)|mau\s+(order|pesan|beli)|ingin\s+(order|pesan|beli|memesan)|bantu\s+pilihkan\s+paket|pilihkan\s+paket|paket\s+yang\s+pas',
             h.get('content', ''), re.IGNORECASE
         ):
             return True
@@ -315,13 +285,71 @@ def format_blood_pressure_reply(bp):
         )
     return f"Tensi {systolic}/{diastolic} masih perlu dilihat bersama gejalanya, Kak. Keluhan pusing/mualnya muncul sejak kapan?"
 
+def is_operational_complaint(text):
+    lower = html.unescape(str(text or '')).lower().strip()
+    if not lower:
+        return False
+    explicit_complaint = re.search(
+        r'\b(komplain|complain|kecewa|marah|tidak\s+puas|ga\s+puas|gak\s+puas|nggak\s+puas|buruk|parah|kapok|mengecewakan)\b',
+        lower,
+    )
+    delivery_issue = (
+        re.search(
+            r'\b(paket|barang|pesanan|order|kiriman)\b.{0,60}\b(belum\s+sampai|tidak\s+sampai|ga\s+sampai|gak\s+sampai|nggak\s+sampai|lama\s+banget|terlambat|telat|nyasar|hilang|tertahan)\b',
+            lower,
+        )
+        or re.search(
+            r'\b(belum\s+sampai|tidak\s+sampai|ga\s+sampai|gak\s+sampai|nggak\s+sampai)\b.{0,60}\b(paket|barang|pesanan|order|kiriman)\b',
+            lower,
+        )
+    )
+    item_issue = re.search(
+        r'\b(rusak|pecah|bocor|sobek|penyok|cacat|salah\s+kirim|barang\s+salah|kurang|tidak\s+lengkap|ga\s+lengkap|gak\s+lengkap|expired|kadaluarsa|kedaluwarsa)\b',
+        lower,
+    ) and re.search(r'\b(paket|barang|produk|pesanan|order|sukumba|box|kemasan)\b', lower)
+    refund_issue = re.search(r'\b(refund|retur|return|uang\s+kembali|balikin\s+uang|ganti\s+barang|klaim|garansi)\b', lower)
+    return bool(explicit_complaint or delivery_issue or item_issue or refund_issue)
+
+def operational_complaint_reply(text):
+    lower = html.unescape(str(text or '')).lower()
+    if re.search(
+        r'\b(rusak|pecah|bocor|sobek|penyok|cacat|salah\s+kirim|barang\s+salah|kurang|tidak\s+lengkap|ga\s+lengkap|gak\s+lengkap|expired|kadaluarsa|kedaluwarsa)\b',
+        lower,
+    ):
+        return (
+            "Mohon maaf ya Kak, CS Syifa bantu cek kendalanya. "
+            "Boleh kirim nomor order/nama penerima, foto produk atau kemasan, dan video unboxing kalau ada? "
+            "Saya teruskan ke admin agar bisa dicek untuk solusi klaimnya."
+        )
+    if re.search(r'\b(belum\s+sampai|tidak\s+sampai|ga\s+sampai|gak\s+sampai|nggak\s+sampai|lama\s+banget|terlambat|telat|nyasar|hilang|tertahan|resi|tracking)\b', lower):
+        return (
+            "Mohon maaf ya Kak kalau pengirimannya belum nyaman. "
+            "Boleh kirim nomor order/nama penerima dan nomor resi kalau sudah ada? "
+            "CS Syifa teruskan ke admin untuk dicek posisi paketnya."
+        )
+    if re.search(r'\b(refund|retur|return|uang\s+kembali|balikin\s+uang|ganti\s+barang|klaim|garansi)\b', lower):
+        return (
+            "Baik Kak, mohon maaf atas kendalanya. "
+            "Untuk pengajuan retur/refund/klaim, boleh kirim nomor order, nama penerima, alasan kendala, "
+            "dan foto atau video pendukungnya ya. CS Syifa teruskan ke admin untuk dicek sesuai prosedur."
+        )
+    return (
+        "Mohon maaf ya Kak atas kendalanya. "
+        "Boleh ceritakan detail masalahnya dan kirim nomor order/nama penerima jika ada? "
+        "CS Syifa teruskan ke admin supaya bisa dibantu cek dan follow up."
+    )
+
 def local_intent_hint(msg):
     lower = html.unescape(str(msg or '')).lower().strip()
     if not lower:
         return None
+    if is_open_question_request(lower):
+        return 'conversation'
     if any(x in lower for x in ['batal', 'cancel', 'gak jadi', 'ga jadi', 'tidak jadi']):
         return 'cancel'
-    if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service', 'komplain']):
+    if is_operational_complaint(lower):
+        return 'complaint'
+    if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service']):
         return 'escalation'
     if is_consultation_request(lower):
         return 'male_health'
@@ -494,11 +522,16 @@ def is_clear_closing(raw_text):
     return bool(re.search(r'\b(terima\s*kasih|makasih|thanks|sama-?sama|bye|dadah|sampai\s+jumpa)\b', lower))
 
 def is_product_question(raw_text):
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    return bool(re.search(
-        r'\b(jualan|produk|jual\s+apa|menjual|harga|harganya|khasiat|manfaat|kandungan|cara\s+minum|aturan\s+minum|dosis|promo|ongkir|cod|sukumba)\b',
-        lower
-    ))
+    return product_helpers.is_product_question(raw_text)
+
+def is_product_packaging_question(raw_text):
+    return product_helpers.is_product_packaging_question(raw_text)
+
+def is_consumption_question(raw_text):
+    return product_helpers.is_consumption_question(raw_text)
+
+def is_dosage_question(raw_text):
+    return product_helpers.is_dosage_question(raw_text)
 
 def has_male_vitality_signal(raw_text):
     lower = html.unescape(str(raw_text or '')).lower().strip()
@@ -535,49 +568,6 @@ def compact_user_text(raw_text):
     lower = re.sub(r'\s+', ' ', lower)
     return lower
 
-def infer_question_id_from_reply(reply):
-    text = html.unescape(str(reply or '')).lower()
-    if re.search(r'pesanan\s+berhasil\s+diterima|terima\s+kasih\s+telah\s+memesan|order\s+id\s*:\s*#?\d+', text):
-        return 'post_order_complete'
-    if re.search(r'(pilihkan|pilih\s+paket|paket\s+yang\s+pas|mau\s+coba|langsung\s+bantu\s+pemesanan|harga/promo)', text):
-        return 'ask_product_info'
-    if re.search(r'(info\s+produk|tanya\s+produk|produk\s+sukumba).{0,60}(konsultasi)|konsultasi.{0,60}(info\s+produk|tanya\s+produk)', text):
-        return 'choose_product_or_consult'
-    if re.search(r'usia.{0,30}(berapa|keluhan).{0,60}(berapa\s+lama|sejak\s+kapan)|berapa\s+lama.{0,60}usia', text):
-        return 'ask_age_duration'
-    if re.search(r'(diabetes|gula\s+darah).{0,80}(tensi|hipertensi|darah\s+tinggi|jantung|obat\s+rutin)|obat\s+rutin.{0,80}(dokter|diabetes|tensi|jantung)', text):
-        return 'ask_risk_factors'
-    if re.search(r'keluhan\s+(ini|tersebut)?.{0,40}(sudah\s+berapa\s+lama|sejak\s+kapan|muncul\s+kapan)|sudah\s+berapa\s+lama.{0,40}keluhan', text):
-        return 'ask_complaint'
-    if re.search(r'(pola\s+tidur|tidur).{0,80}(rokok|merokok|stres|stress)|rokok.{0,80}(tidur|stres|stress)', text):
-        return 'ask_lifestyle'
-    if re.search(r'(tensi\s+terakhir|tekanan\s+darah|ukur\s+ulang|cek\s+tensi)', text):
-        return 'ask_bp'
-    if re.search(r'(keluhan\s+apa|keluhan\s+utama|mau\s+dibantu\s+soal\s+apa|tujuan\s+konsultasi)', text):
-        return 'ask_complaint'
-    if re.search(r'(mau|boleh).{0,30}(saya\s+)?(jelaskan|terangkan).{0,40}(produk|sukumba|manfaat|aturan|minum|paket)|tertarik\s+tahu\s+lebih\s+lanjut', text):
-        return 'ask_product_info'
-    if re.search(r'(boleh|minta).{0,30}nama\s+penerima', text):
-        return 'ask_order_name'
-    if re.search(r'(nomor|no\.?|hp|wa).{0,40}(dihubungi|aktif)', text):
-        return 'ask_order_phone'
-    if re.search(r'alamat\s+lengkap', text):
-        return 'ask_order_address'
-    return 'none'
-
-def state_from_question_id(question_id):
-    if question_id == 'choose_product_or_consult':
-        return {'active_flow': 'triage', 'active_stage': 'awaiting_choice', 'pending_slot': 'conversation_choice', 'last_offer_type': 'choice'}
-    if question_id in CONSULT_QUESTION_IDS:
-        return {'active_flow': 'consultation', 'active_stage': question_id.replace('ask_', ''), 'pending_slot': question_id.replace('ask_', ''), 'last_offer_type': 'none'}
-    if question_id == 'ask_product_info':
-        return {'active_flow': 'product', 'active_stage': 'awaiting_product_info_confirmation', 'pending_slot': 'product_info_confirmation', 'last_offer_type': 'product_info'}
-    if question_id.startswith('ask_order_'):
-        return {'active_flow': 'order', 'active_stage': question_id.replace('ask_order_', ''), 'pending_slot': question_id.replace('ask_order_', ''), 'last_offer_type': 'order'}
-    if question_id == 'post_order_complete':
-        return {'active_flow': 'post_order', 'active_stage': 'completed', 'pending_slot': 'none', 'last_offer_type': 'none'}
-    return {}
-
 def is_short_product_request(raw_text):
     lower = compact_user_text(raw_text)
     return lower in {'info', 'info deh', 'info dong', 'info kak', 'produk', 'produk kak', 'info produk', 'tanya produk', 'jelasin', 'jelaskan'}
@@ -591,6 +581,24 @@ def is_short_purchase_request(raw_text):
         'lanjut pesan', 'lanjut pesen', 'lanjut order', 'gas', 'gas beli',
         'coba', 'mau coba', 'boleh coba'
     }
+
+def detect_package_choice(raw_text):
+    return order_helpers.detect_package_choice(raw_text)
+
+def order_prefill_for_choice(raw_text, payment=''):
+    return order_helpers.order_prefill_for_choice(raw_text, payment)
+
+def is_package_choice_request(raw_text):
+    return order_helpers.is_package_choice_request(raw_text)
+
+def is_package_recommendation_request(raw_text):
+    return order_helpers.is_package_recommendation_request(raw_text)
+
+def package_recommendation_reply(raw_text, profile=None, history=None):
+    return order_helpers.package_recommendation_reply(raw_text, profile, history)
+
+def package_choice_reply(raw_text, default_payment=''):
+    return order_helpers.package_choice_reply(raw_text, template_order_form, default_payment)
 
 def last_assistant_has_product_context(history):
     last_ai = last_assistant_message(history)
@@ -620,20 +628,12 @@ def is_product_positive_reaction(raw_text):
     ))
 
 def build_conversation_state(profile, history=None):
-    profile = normalize_profile(profile)
-    state = {
-        'active_flow': profile.get('active_flow') or ('consultation' if profile.get('last_question_id') in CONSULT_QUESTION_IDS else 'triage'),
-        'active_stage': profile.get('active_stage') or profile.get('consultation_stage') or 'idle',
-        'last_question_id': profile.get('last_question_id') or 'none',
-        'pending_slot': profile.get('pending_slot') or 'none',
-        'last_offer_type': profile.get('last_offer_type') or 'none',
-        'topic': profile.get('consultation_topic') or 'none',
-    }
-    last_q = infer_question_id_from_reply(last_assistant_message(history or []))
-    if last_q != 'none':
-        state['last_question_id'] = last_q
-        state.update(state_from_question_id(last_q))
-    return state
+    return state_helpers.build_conversation_state(
+        profile,
+        history,
+        normalize_profile_fn=normalize_profile,
+        last_assistant_message_fn=last_assistant_message,
+    )
 
 def is_short_contextual_reply(raw_text):
     lower = compact_user_text(raw_text)
@@ -648,212 +648,187 @@ def product_reaction_reply():
         "Kalau Kakak mau coba, saya bisa bantu pilihkan paket yang pas atau langsung bantu pemesanan."
     )
 
-def product_context_updates(confidence='high'):
-    return {
-        'active_flow': 'product',
-        'active_stage': 'explaining_product',
-        'last_question_id': 'ask_product_info',
-        'pending_slot': 'product_info_confirmation',
-        'last_offer_type': 'product_info',
-        'state_confidence': confidence,
-    }
+
+# ------------------------------------------------------------------
+# 3B. TEMPLATE RESPON CS SYIFA - SUKUMBA (DYNAMIC & FALLBACK)
+# ------------------------------------------------------------------
+
+def get_dynamic_template(title_key, default_text):
+    return template_service.dynamic(title_key, default_text)
+
+
+def template_greeting_syifa(raw_text=''):
+    return template_service.greeting_syifa(raw_text)
+
+
+def template_ask_complaint_general():
+    return template_service.ask_complaint_general()
+
+
+def template_known_general_complaint():
+    return template_service.known_general_complaint()
+
+
+def template_ask_complaint_male_vitality():
+    return template_service.ask_complaint_male_vitality()
+
+
+def template_promo_sukumba():
+    return template_service.promo_sukumba()
+
+
+def template_cara_konsumsi():
+    return template_service.cara_konsumsi()
+
+
+def template_aturan_minum():
+    return template_service.aturan_minum()
+
+
+def template_ask_ever_consumed():
+    return template_service.ask_ever_consumed()
+
+
+def template_order_form(intro=None):
+    return template_service.order_form(intro)
+
+
+def template_transfer_info():
+    return template_service.transfer_info()
+
+
+def template_cod_1_box():
+    return template_service.cod_1_box()
+
+
+def template_empathy_reply():
+    return template_service.empathy_reply()
+
+
+def template_order_success():
+    return template_service.order_success()
+
+
+def template_bpom_safe():
+    return template_service.bpom_safe()
+
+
+def template_halal_info():
+    return template_service.halal_info()
+
+
+def template_diabetes_warning():
+    return template_service.diabetes_warning()
+
+
+def template_health_risk_warning():
+    return template_service.health_risk_warning()
+
+
+def template_komposisi():
+    return template_service.komposisi()
+
+
+def template_isi_box():
+    return template_service.isi_box()
+
+
+def template_estimasi_pengiriman():
+    return template_service.estimasi_pengiriman()
+
+
+def template_kurir_ongkir():
+    return template_service.kurir_ongkir()
+
+
+def template_ongkir_info():
+    return template_service.ongkir_info()
+
+
+def template_kurir_info():
+    return template_service.kurir_info()
+
+
+def template_testimoni_offer():
+    return template_service.testimoni_offer()
+
+
+def syifa_template_router(raw_text, history=None, profile=None):
+    """Router template cepat agar jawaban penting tetap konsisten seperti CS Syifa."""
+    deps = SyifaRouterDeps(
+        is_identity_question=is_identity_question,
+        is_name_question=is_name_question,
+        is_clear_closing=is_clear_closing,
+        build_conversation_state=build_conversation_state,
+        is_package_choice_request=is_package_choice_request,
+        is_package_recommendation_request=is_package_recommendation_request,
+        is_product_context_active=is_product_context_active,
+        package_choice_reply=package_choice_reply,
+        package_recommendation_reply=package_recommendation_reply,
+        order_prefill_for_choice=order_prefill_for_choice,
+        is_product_packaging_question=is_product_packaging_question,
+        is_dosage_question=is_dosage_question,
+        is_consumption_question=is_consumption_question,
+        is_greeting_message=is_greeting_message,
+        deterministic_order_reply=deterministic_order_reply,
+        product_context_updates=product_context_updates,
+        template_order_form=template_order_form,
+        template_order_success=template_order_success,
+        template_transfer_info=template_transfer_info,
+        template_cod_1_box=template_cod_1_box,
+        template_isi_box=template_isi_box,
+        template_estimasi_pengiriman=template_estimasi_pengiriman,
+        template_kurir_ongkir=template_kurir_ongkir,
+        template_ongkir_info=template_ongkir_info,
+        template_kurir_info=template_kurir_info,
+        template_promo_sukumba=template_promo_sukumba,
+        template_aturan_minum=template_aturan_minum,
+        template_cara_konsumsi=template_cara_konsumsi,
+        template_ask_ever_consumed=template_ask_ever_consumed,
+        template_diabetes_warning=template_diabetes_warning,
+        template_health_risk_warning=template_health_risk_warning,
+        template_bpom_safe=template_bpom_safe,
+        template_halal_info=template_halal_info,
+        template_komposisi=template_komposisi,
+        template_testimoni_offer=template_testimoni_offer,
+        template_known_general_complaint=template_known_general_complaint,
+        template_ask_complaint_male_vitality=template_ask_complaint_male_vitality,
+        template_greeting_syifa=template_greeting_syifa,
+    )
+    return route_syifa_template(raw_text, history, profile, deps)
 
 def state_engine_precheck(msg, history, cfg, profile=None, knowledge_context=''):
-    lower = compact_user_text(msg)
-    state = build_conversation_state(profile, history)
-    if not lower:
-        return None
-    if is_identity_question(lower) or is_name_question(lower) or is_clear_closing(lower):
-        return None
-    if is_short_product_request(lower):
-        return (
-            deterministic_product_reply(msg, profile, history),
-            'product_info',
-            'state_product_shortcut',
-            {'profile_updates': product_context_updates('high')}
-        )
-
-    if is_short_purchase_request(lower) and (state.get('active_flow') in {'product', 'post_order'} or last_assistant_has_product_context(history)):
-        return (
-            deterministic_order_reply(msg, profile, history),
-            'order',
-            'state_order_shortcut',
-            {'start_order': True, 'profile_updates': {
-                'active_flow': 'order',
-                'active_stage': 'collecting_order_data',
-                'last_question_id': 'ask_order_name',
-                'pending_slot': 'name',
-                'last_offer_type': 'order',
-                'state_confidence': 'high',
-            }}
-        )
-
-    if is_product_context_active(state, history, profile):
-        if is_explicit_order_request(lower):
-            return (
-                deterministic_order_reply(msg, profile, history),
-                'order',
-                'state_order_shortcut',
-                {'start_order': True, 'profile_updates': {
-                    'active_flow': 'order',
-                    'active_stage': 'collecting_order_data',
-                    'last_question_id': 'ask_order_name',
-                    'pending_slot': 'name',
-                    'last_offer_type': 'order',
-                    'state_confidence': 'high',
-                }}
-            )
-        if is_product_question(lower):
-            return (
-                deterministic_product_reply(msg, profile, history),
-                'product_info',
-                'state_product_followup',
-                {'profile_updates': product_context_updates('high')}
-            )
-        if is_product_positive_reaction(lower) or is_short_contextual_reply(lower):
-            return (
-                product_reaction_reply(),
-                'product_info',
-                'state_product_reaction',
-                {'profile_updates': product_context_updates('high')}
-            )
-
-    if is_consultation_request(lower) or has_male_health_signal(lower) or has_general_health_signal(lower) or is_product_question(lower) or is_explicit_order_request(lower):
-        return None
-    if lower in {'produk', 'info produk', 'tanya produk'}:
-        return None
-
-    if is_short_contextual_reply(lower):
-        question_id = state.get('last_question_id')
-        active_flow = state.get('active_flow')
-        if question_id == 'post_order_complete' or active_flow == 'post_order':
-            return (
-                "Siap Kak, terima kasih. Tim kami akan segera menghubungi untuk pesanan Kakak.",
-                'post_order',
-                'post_order_ack_agent',
-                {'profile_updates': {
-                    'active_flow': 'post_order',
-                    'active_stage': 'completed',
-                    'last_question_id': 'post_order_complete',
-                    'pending_slot': 'none',
-                    'last_offer_type': 'none',
-                    'state_confidence': 'high',
-                }}
-            )
-        if question_id == 'choose_product_or_consult':
-            return (
-                triage_choice_reply(),
-                'conversation',
-                'state_clarifier',
-                {'profile_updates': {
-                    'active_flow': 'triage',
-                    'active_stage': 'awaiting_choice',
-                    'last_question_id': 'choose_product_or_consult',
-                    'pending_slot': 'conversation_choice',
-                    'last_offer_type': 'choice',
-                    'state_confidence': 'high',
-                }}
-            )
-        if question_id == 'ask_product_info' or active_flow == 'product':
-            return (
-                product_reaction_reply(),
-                'product_info',
-                'state_product_followup',
-                {'profile_updates': product_context_updates('high')}
-            )
-        if question_id in CONSULT_QUESTION_IDS or active_flow == 'consultation':
-            return None
-        if question_id.startswith('ask_order_') or state.get('last_offer_type') == 'order':
-            return None
-        if is_followup_reaction(lower):
-            return (
-                "Iya Kak. Saya CS Sukumba. Kakak mau info produk atau konsultasi dulu?",
-                'conversation',
-                'state_clarifier',
-                {'profile_updates': {
-                    'active_flow': 'triage',
-                    'active_stage': 'awaiting_choice',
-                    'last_question_id': 'choose_product_or_consult',
-                    'pending_slot': 'conversation_choice',
-                    'last_offer_type': 'choice',
-                    'state_confidence': 'medium',
-                }}
-            )
-        return (
-            triage_choice_reply(),
-            'conversation',
-            'state_clarifier',
-            {'profile_updates': {
-                'active_flow': 'triage',
-                'active_stage': 'awaiting_choice',
-                'last_question_id': 'choose_product_or_consult',
-                'pending_slot': 'conversation_choice',
-                'last_offer_type': 'choice',
-                'state_confidence': 'medium',
-            }}
-        )
-    return None
-
-def state_updates_for_reply(reply, intent, agent, raw_text=None, profile_updates=None):
-    updates = {}
-    qid = infer_question_id_from_reply(reply)
-    updates['last_question_id'] = qid
-    updates['state_confidence'] = 'high' if qid != 'none' else 'medium'
-    updates.update(state_from_question_id(qid))
-
-    if agent == 'test_probe_agent':
-        updates.update({
-            'active_flow': 'triage',
-            'active_stage': 'idle',
-            'last_question_id': 'none',
-            'pending_slot': 'none',
-            'last_offer_type': 'none',
-        })
-    elif agent in {'greeting_agent', 'identity_agent', 'memory_agent', 'state_clarifier'}:
-        updates.update({
-            'active_flow': 'triage',
-            'active_stage': 'awaiting_choice',
-            'last_question_id': 'choose_product_or_consult',
-            'pending_slot': 'conversation_choice',
-            'last_offer_type': 'choice',
-        })
-    elif intent == 'male_health' or agent == 'male_health_consultant_agent':
-        updates.setdefault('active_flow', 'consultation')
-        updates.setdefault('active_stage', (profile_updates or {}).get('consultation_stage', 'collecting_context'))
-        updates.setdefault('pending_slot', (profile_updates or {}).get('next_question', 'consultation_context'))
-        updates.setdefault('last_offer_type', 'none')
-    elif intent == 'product_info' or agent in {'product_agent', 'state_product_followup', 'state_product_reaction', 'state_product_shortcut'}:
-        updates.setdefault('active_flow', 'product')
-        updates.setdefault('active_stage', 'explaining_product')
-        updates.setdefault('pending_slot', 'none')
-        updates.setdefault('last_offer_type', 'product_info')
-    elif intent == 'order' or agent == 'order_agent':
-        updates.setdefault('active_flow', 'order')
-        updates.setdefault('active_stage', 'collecting_order_data')
-        updates.setdefault('pending_slot', 'order_data')
-        updates.setdefault('last_offer_type', 'order')
-    elif intent == 'post_order' or agent == 'post_order_ack_agent':
-        updates.update({
-            'active_flow': 'post_order',
-            'active_stage': 'completed',
-            'pending_slot': 'none',
-            'last_offer_type': 'none',
-            'last_question_id': 'post_order_complete',
-        })
-    elif intent in {'closing', 'cancel'}:
-        updates.update({
-            'active_flow': 'idle',
-            'active_stage': 'idle',
-            'pending_slot': 'none',
-            'last_offer_type': 'none',
-        })
-
-    if profile_updates:
-        if profile_updates.get('consultation_topic'):
-            updates['topic'] = profile_updates.get('consultation_topic')
-        if profile_updates.get('consultation_stage') and updates.get('active_flow') == 'consultation':
-            updates['active_stage'] = profile_updates.get('consultation_stage')
-    return updates
+    deps = StateRouterDeps(
+        compact_user_text=compact_user_text,
+        build_conversation_state=build_conversation_state,
+        is_identity_question=is_identity_question,
+        is_name_question=is_name_question,
+        is_clear_closing=is_clear_closing,
+        is_short_product_request=is_short_product_request,
+        deterministic_product_reply=deterministic_product_reply,
+        product_context_updates=product_context_updates,
+        is_short_purchase_request=is_short_purchase_request,
+        last_assistant_has_product_context=last_assistant_has_product_context,
+        deterministic_order_reply=deterministic_order_reply,
+        template_order_form=template_order_form,
+        is_package_choice_request=is_package_choice_request,
+        is_package_recommendation_request=is_package_recommendation_request,
+        package_recommendation_reply=package_recommendation_reply,
+        package_choice_reply=package_choice_reply,
+        order_prefill_for_choice=order_prefill_for_choice,
+        is_product_context_active=is_product_context_active,
+        is_explicit_order_request=is_explicit_order_request,
+        is_product_question=is_product_question,
+        is_product_positive_reaction=is_product_positive_reaction,
+        is_short_contextual_reply=is_short_contextual_reply,
+        product_reaction_reply=product_reaction_reply,
+        is_consultation_request=is_consultation_request,
+        has_male_health_signal=has_male_health_signal,
+        has_general_health_signal=has_general_health_signal,
+        triage_choice_reply=triage_choice_reply,
+        is_followup_reaction=is_followup_reaction,
+    )
+    return route_state_precheck(msg, history, cfg, profile, knowledge_context, deps)
 
 def last_assistant_message(history):
     for h in reversed(history or []):
@@ -863,287 +838,109 @@ def last_assistant_message(history):
 
 def text_has_any_value(profile, keys):
     profile = normalize_profile(profile)
-    return any(profile.get(key) not in (None, '', [], {}) for key in keys)
+    return consultation_helpers.text_has_any_value(profile, keys)
 
 def male_vitality_context(profile, history=None):
     profile = normalize_profile(profile)
-    profile_context_active = profile.get('active_flow') == 'consultation' or profile.get('last_question_id') in CONSULT_QUESTION_IDS
-    if profile.get('consultation_topic') == 'male_vitality' and profile_context_active:
-        return True
-    haystack = ' '.join([
-        str(profile.get('complaint', '') or ''),
-        str(profile.get('complaint_detail', '') or ''),
-        str(profile.get('consultation_goal', '') or ''),
-        str(profile.get('summary', '') or ''),
-    ])
-    if profile_context_active and has_male_vitality_signal(haystack):
-        return True
-    for h in (history or [])[-8:]:
-        if has_male_vitality_signal(h.get('content', '')):
-            return True
-        if h.get('role') == 'assistant' and re.search(r'vitalitas|ereksi|usia kakak.*keluhan|diabetes.*tensi.*jantung', h.get('content', ''), re.IGNORECASE):
-            return True
-    return False
+    return consultation_helpers.male_vitality_context(profile, history, has_male_vitality_signal)
 
 def consultation_topic_from_context(raw_text, profile=None, history=None):
     profile = normalize_profile(profile)
-    if has_male_vitality_signal(raw_text) or has_male_vitality_goal(raw_text) or male_vitality_context(profile, history):
-        return 'male_vitality'
-    if has_general_stamina_signal(raw_text):
-        return 'stamina_general'
-    if has_general_health_signal(raw_text):
-        return 'general_health'
-    return profile.get('consultation_topic', '')
+    return consultation_helpers.consultation_topic_from_context(
+        raw_text,
+        profile,
+        history,
+        has_male_vitality_signal_fn=has_male_vitality_signal,
+        has_male_vitality_goal_fn=has_male_vitality_goal,
+        has_general_stamina_signal_fn=has_general_stamina_signal,
+        has_general_health_signal_fn=has_general_health_signal,
+    )
 
 def risk_factor_status(profile):
     profile = normalize_profile(profile)
-    return {
-        'diabetes': profile.get('diabetes'),
-        'hypertension': profile.get('hypertension'),
-        'heart_issue': profile.get('heart_issue'),
-        'medication': profile.get('medication'),
-    }
+    return consultation_helpers.risk_factor_status(profile)
 
 def has_risk_factor_answer(profile):
-    return text_has_any_value(profile, ['diabetes', 'hypertension', 'heart_issue', 'medication'])
+    return consultation_helpers.has_risk_factor_answer(normalize_profile(profile))
 
 def has_lifestyle_answer(profile):
-    return text_has_any_value(profile, ['sleep', 'smoking', 'stress'])
+    return consultation_helpers.has_lifestyle_answer(normalize_profile(profile))
 
 def male_consult_next_step(profile):
     profile = normalize_profile(profile)
-    if not profile.get('age') or not profile.get('duration'):
-        return 'age_duration', 'usia dan durasi keluhan'
-    if not has_risk_factor_answer(profile):
-        return 'risk_factors', 'riwayat diabetes, tensi, jantung, atau obat rutin'
-    if not has_lifestyle_answer(profile):
-        return 'lifestyle', 'pola tidur, rokok, dan stres'
-    return 'education_offer', 'edukasi ringan dan rekomendasi produk'
+    return consultation_helpers.male_consult_next_step(profile)
 
 def normalize_duration_unit(unit):
-    unit = str(unit or '').lower()
-    if unit.endswith('an') and unit not in {'bulanan'}:
-        unit = unit[:-2]
-    if unit == 'bulanan':
-        unit = 'bulan'
-    if unit in {'th', 'thn'}:
-        return 'tahun'
-    return unit
+    return consultation_helpers.normalize_duration_unit(unit)
 
 def extract_duration_value(raw_text):
-    lower = html.unescape(str(raw_text or '')).lower()
-    unit_pattern = r'hari|harian|minggu|mingguan|bulan|bulanan|tahun|tahunan|thn|th'
-    marker_patterns = [
-        rf'\b(?:sudah|udah|udh|dari|selama)\s+(?:sekitar|sktr|kurang\s+lebih\s+)?(\d{{1,2}})\s*({unit_pattern})\b',
-        rf'\b(?:sekitar|sktr|kurang\s+lebih)\s+(\d{{1,2}})\s*({unit_pattern})\b',
-    ]
-    for pattern in marker_patterns:
-        match = re.search(pattern, lower)
-        if match:
-            value = int(match.group(1))
-            unit = normalize_duration_unit(match.group(2))
-            if 1 <= value <= 60:
-                return f"{value} {unit}"
-    return ''
+    return consultation_helpers.extract_duration_value(raw_text)
 
 def extract_age_duration_slots(raw_text, profile=None):
     profile = normalize_profile(profile)
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    updates = {}
-    if extract_blood_pressure(lower):
-        return updates
-
-    if not profile.get('age'):
-        explicit_age = re.search(r'\b(?:umur|usia|usia\s+saya|saya)\s*(\d{2})\s*(?:tahun|th|thn)?\b', lower)
-        age_val = None
-        if explicit_age:
-            age_val = int(explicit_age.group(1))
-        else:
-            nums = [
-                int(n) for n in re.findall(
-                    r'(?<!/)\b(\d{2})(?:\s*(?:tahun|thn|th)\b|\b)(?!/)',
-                    lower
-                )
-            ]
-            for n in nums:
-                if 18 <= n <= 80:
-                    age_val = n
-                    break
-        if age_val and 18 <= age_val <= 80:
-            updates['age'] = str(age_val)
-
-    if not profile.get('duration'):
-        duration = extract_duration_value(lower)
-        if not duration:
-            matches = re.findall(r'\b(\d{1,2})\s*(hari|harian|minggu|mingguan|bulan|bulanan|tahun|tahunan|thn|th)\b', lower)
-            age_candidate = updates.get('age') or profile.get('age')
-            for raw_value, raw_unit in matches:
-                value = int(raw_value)
-                unit = normalize_duration_unit(raw_unit)
-                if str(value) == str(age_candidate) and unit == 'tahun':
-                    continue
-                if unit == 'tahun' and value > 30:
-                    continue
-                if 1 <= value <= 60:
-                    duration = f"{value} {unit}"
-                    break
-        if duration:
-            updates['duration'] = duration
-    return updates
+    return consultation_helpers.extract_age_duration_slots(raw_text, profile, extract_blood_pressure)
 
 def is_negative_risk_answer(raw_text):
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    lower = re.sub(r'[.!?]+$', '', lower)
-    lower = re.sub(r'\b(kak|ya|yah|sih|kok|nih)\b', '', lower)
-    lower = re.sub(r'\s+', ' ', lower).strip()
-    return bool(re.fullmatch(
-        r'(tidak ada|tdk ada|gak ada|ga ada|nggak ada|ngga ada|enggak ada|'
-        r'tidak|tdk|gak|ga|nggak|ngga|enggak|belum ada|aman|normal)',
-        lower
-    ))
+    return consultation_helpers.is_negative_risk_answer(raw_text)
 
 def extract_risk_factor_slots(raw_text):
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    updates = {}
-    if is_negative_risk_answer(raw_text):
-        updates['diabetes'] = 'tidak'
-        updates['hypertension'] = 'tidak'
-        updates['heart_issue'] = 'tidak'
-        updates['medication'] = 'tidak ada'
-        return updates
-    if re.search(r'\b(tensi|hipertensi|darah\s+tinggi)\b', lower):
-        updates['hypertension'] = infer_yes_no(lower, ['hipertensi', 'darah tinggi', 'tensi']) or 'ya'
-    if re.search(r'\b(diabetes|gula\s+darah|kencing\s+manis)\b', lower):
-        updates['diabetes'] = infer_yes_no(lower, ['diabetes', 'gula darah', 'kencing manis']) or 'ya'
-    if re.search(r'\b(jantung|nitrat|isosorbid)\b', lower):
-        updates['heart_issue'] = infer_yes_no(lower, ['jantung', 'nitrat', 'isosorbid']) or 'ya'
-    if re.search(r'\b(obat\s+rutin|minum\s+obat|obat\s+dokter)\b', lower):
-        if re.search(r'\b(tidak|tdk|gak|ga|nggak|ngga|belum)\b.{0,12}\bobat\b|\bobat\b.{0,12}\b(tidak|tdk|gak|ga|nggak|ngga|belum)\b', lower):
-            updates['medication'] = 'tidak ada'
-        else:
-            updates['medication'] = html.unescape(str(raw_text or ''))[:160]
-    return updates
+    return consultation_helpers.extract_risk_factor_slots(raw_text)
 
 def extract_lifestyle_slots(raw_text):
-    text = html.unescape(str(raw_text or ''))
-    lower = text.lower().strip()
-    updates = {}
-    if re.search(r'\b(begadang|kurang\s+tidur|susah\s+tidur|insomnia)\b', lower):
-        updates['sleep'] = text[:160]
-    elif re.search(r'\b(pola\s+tidur|tidur)\b', lower):
-        if re.search(r'\b(aman|normal|cukup|teratur|baik|bagus)\b', lower):
-            updates['sleep'] = 'aman/normal'
-        elif re.search(r'\b(tidak|tdk|gak|ga|nggak|ngga)\b.{0,12}\b(aman|normal|baik|teratur)\b', lower):
-            updates['sleep'] = text[:160]
-        else:
-            updates['sleep'] = text[:160]
-
-    smoking = infer_yes_no(lower, ['rokok', 'merokok', 'perokok'])
-    if smoking:
-        updates['smoking'] = smoking
-
-    if re.search(r'\b(stres|stress|banyak\s+pikiran|tekanan\s+kerja)\b', lower):
-        if re.search(r'\b(tidak|tdk|gak|ga|nggak|ngga)\b.{0,12}\b(stres|stress)\b|\b(stres|stress)\b.{0,12}\b(aman|normal|tidak|tdk|gak|ga|nggak|ngga)\b', lower):
-            updates['stress'] = 'tidak'
-        else:
-            updates['stress'] = text[:160]
-    return updates
+    return consultation_helpers.extract_lifestyle_slots(raw_text)
 
 def extract_state_slot_updates(raw_text, profile=None, history=None, intent='conversation'):
     profile = normalize_profile(profile)
-    history = history or []
-    state = build_conversation_state(profile, history)
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    updates = {}
-
-    if state.get('last_question_id') == 'ask_age_duration' or state.get('pending_slot') == 'age_duration':
-        updates.update(extract_age_duration_slots(raw_text, profile))
-
-    if state.get('last_question_id') == 'ask_risk_factors' or state.get('pending_slot') == 'risk_factors':
-        updates.update(extract_risk_factor_slots(raw_text))
-
-    if state.get('last_question_id') == 'ask_lifestyle' or state.get('pending_slot') == 'lifestyle':
-        updates.update(extract_lifestyle_slots(raw_text))
-
-    return updates
+    return consultation_helpers.extract_state_slot_updates(
+        raw_text,
+        profile,
+        history,
+        build_conversation_state_fn=build_conversation_state,
+        extract_blood_pressure_fn=extract_blood_pressure,
+    )
 
 def recover_consultation_slots_from_history(history, profile=None):
-    recovered = dict(normalize_profile(profile))
-    last_question_id = 'none'
-    for h in history or []:
-        role = h.get('role')
-        content = h.get('content', '')
-        if role == 'assistant':
-            qid = infer_question_id_from_reply(content)
-            if qid != 'none':
-                last_question_id = qid
-            continue
-        if role != 'user':
-            continue
-        if last_question_id == 'ask_age_duration':
-            recovered.update(extract_age_duration_slots(content, recovered))
-        elif last_question_id == 'ask_risk_factors':
-            recovered.update(extract_risk_factor_slots(content))
-        elif last_question_id == 'ask_lifestyle':
-            recovered.update(extract_lifestyle_slots(content))
-        elif has_male_health_signal(content) or has_male_vitality_goal(content):
-            recovered.setdefault('consultation_topic', consultation_topic_from_context(content, recovered, history))
-        recovered.update(extract_age_duration_slots(content, recovered))
-    return recovered
+    return consultation_helpers.recover_consultation_slots_from_history(
+        history,
+        normalize_profile(profile),
+        infer_question_id_from_reply_fn=infer_question_id_from_reply,
+        consultation_topic_from_context_fn=consultation_topic_from_context,
+        has_male_health_signal_fn=has_male_health_signal,
+        has_male_vitality_goal_fn=has_male_vitality_goal,
+        extract_blood_pressure_fn=extract_blood_pressure,
+    )
 
 def merge_transient_profile(profile, raw_text, intent='male_health', history=None):
-    merged = dict(normalize_profile(profile))
-    if intent == 'male_health':
-        merged.update(recover_consultation_slots_from_history((history or [])[-14:], merged))
-    parsed = extract_memory_updates(raw_text, intent)
-    parsed.update(extract_state_slot_updates(raw_text, merged, history, intent))
-    merged.update(parsed)
-    return merged
+    return consultation_helpers.merge_transient_profile(
+        normalize_profile(profile),
+        raw_text,
+        intent,
+        history,
+        extract_memory_updates_fn=extract_memory_updates,
+        build_conversation_state_fn=build_conversation_state,
+        infer_question_id_from_reply_fn=infer_question_id_from_reply,
+        consultation_topic_from_context_fn=consultation_topic_from_context,
+        has_male_health_signal_fn=has_male_health_signal,
+        has_male_vitality_goal_fn=has_male_vitality_goal,
+        extract_blood_pressure_fn=extract_blood_pressure,
+    )
 
 def enrich_consultation_state(profile, updates, raw_text, intent):
-    updates = dict(updates or {})
-    profile = normalize_profile(profile)
-    lower = html.unescape(str(raw_text or '')).lower()
-    should_track = (
-        intent == 'male_health'
-        or is_consultation_request(lower)
-        or has_male_health_signal(lower)
-        or has_general_health_signal(lower)
-        or (
-            profile.get('active_flow') == 'consultation'
-            and profile.get('last_question_id') in CONSULT_QUESTION_IDS
-            and is_consultation_context_continuation(lower, profile)
-        )
+    deps = consultation_helpers.ConsultationStateDeps(
+        is_consultation_request=is_consultation_request,
+        has_male_health_signal=has_male_health_signal,
+        has_general_health_signal=has_general_health_signal,
+        is_consultation_context_continuation=is_consultation_context_continuation,
+        consultation_topic_from_context=consultation_topic_from_context,
+        has_male_vitality_goal=has_male_vitality_goal,
     )
-    if not should_track:
-        return updates
-
-    merged = dict(profile)
-    merged.update(updates)
-    topic = consultation_topic_from_context(raw_text, merged)
-    updates['conversation_mode'] = 'consultation'
-    if topic:
-        updates['consultation_topic'] = topic
-    if has_male_vitality_goal(raw_text):
-        updates['consultation_goal'] = 'ingin stamina/vitalitas lebih prima'
-
-    if topic == 'male_vitality':
-        stage, next_question = male_consult_next_step(merged)
-        updates['consultation_stage'] = stage
-        updates['next_question'] = next_question
-        asked = set(filter(None, re.split(r'\s*,\s*', str(profile.get('asked_questions', '') or ''))))
-        if profile.get('age') or updates.get('age') or profile.get('duration') or updates.get('duration'):
-            asked.add('age_duration')
-        if has_risk_factor_answer(merged):
-            asked.add('risk_factors')
-        if has_lifestyle_answer(merged):
-            asked.add('lifestyle')
-        if asked:
-            updates['asked_questions'] = ','.join(sorted(asked))
-    elif topic in {'general_health', 'stamina_general'}:
-        updates.setdefault('consultation_stage', 'clarifying_complaint')
-        updates.setdefault('next_question', 'keluhan utama, durasi, dan pemicu')
-    return updates
+    return consultation_helpers.enrich_consultation_state(
+        normalize_profile(profile),
+        updates,
+        raw_text,
+        intent,
+        deps,
+    )
 
 
 def deterministic_intent(msg, history=None, profile=None):
@@ -1161,9 +958,13 @@ def deterministic_intent(msg, history=None, profile=None):
         return 'identity', 100
     if is_name_question(lower):
         return 'memory_lookup', 100
+    if is_open_question_request(lower):
+        return 'conversation', 99
     if any(x in lower for x in ['batal', 'cancel', 'gak jadi', 'ga jadi', 'tidak jadi']):
         return 'cancel', 96
-    if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service', 'komplain']):
+    if is_operational_complaint(lower):
+        return 'complaint', 97
+    if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service']):
         return 'escalation', 94
     if any(x in lower for x in ['resi', 'tracking', 'status pesanan', 'pesanan saya', 'order saya', 'cek pesanan']):
         return 'order_status', 94
@@ -1193,12 +994,7 @@ def should_write_summary(intent, profile_updates):
     return intent in {'male_health', 'order', 'order_status', 'complaint', 'escalation'}
 
 def infer_yes_no(lower, positive_terms):
-    negation = r'(tidak|nggak|gak|ga|bukan|belum|normal|aman)'
-    for term in positive_terms:
-        if term in lower:
-            window = lower[max(0, lower.find(term)-18):lower.find(term)+len(term)+18]
-            return 'tidak' if re.search(negation, window) else 'ya'
-    return None
+    return consultation_helpers.infer_yes_no(lower, positive_terms)
 
 def extract_memory_updates(raw_text, intent):
     text = html.unescape(str(raw_text or ''))
@@ -1244,9 +1040,9 @@ def extract_memory_updates(raw_text, intent):
         except Exception:
             pass
 
-    duration = re.search(r'\b(?:sudah|udah|udh|sekitar|dari)\s+([^,.!?]{1,40}?(?:hari|minggu|bulan|tahun|thn))\b', lower)
+    duration = extract_duration_value(lower)
     if duration:
-        updates['duration'] = duration.group(1).strip()
+        updates['duration'] = duration
 
     diabetes = infer_yes_no(lower, ['diabetes', 'gula darah', 'kencing manis'])
     if diabetes: updates['diabetes'] = diabetes
@@ -1420,13 +1216,13 @@ def guard_reply(reply, intent='general'):
         if intent == 'identity':
             return "Saya CS Sukumba, Kak. Saya bantu info produk dan konsultasi seputar stamina/kesehatan pria dengan bahasa yang tetap nyaman."
         if intent == 'greeting':
-            return "Halo Kak, selamat datang di Sukumba. Bisa saya bantu info produk atau konsultasi dulu?"
+            return template_greeting_syifa()
         if intent == 'closing':
             return "Siap Kak, terima kasih. Kalau butuh bantuan lagi, tinggal chat saja."
         return "Siap Kak. Mau lanjut tanya produk Sukumba atau konsultasi dulu?"
     text = re.sub(r'\b[Kk]amu\b', 'Kakak', text)
     text = re.sub(r'\bAnda\b', 'Kakak', text)
-    text = re.sub(r'\s+\n', '\n', text)
+    text = re.sub(r'[ \t]+\n', '\n', text)
     return text
 
 def clean_panel_prompt(prompt):
@@ -1466,30 +1262,66 @@ def deterministic_safe_reply(raw_text, intent='conversation', profile=None, hist
     return "Siap Kak. Bisa ceritakan sedikit lagi keluhannya atau tujuan konsultasinya, biar saya arahkan pelan-pelan."
 
 def deterministic_order_reply(raw_text, profile=None, history=None):
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    if re.search(r'\bcara\s+(beli|pesan|pesen|order|pemesanan)\b|\b(beli|pesan|pesen|order|pemesanan)\s+(gimana|bagaimana|gmn|gmna|caranya)\b', lower):
-        return "Bisa Kak. Kalau mau beli Sukumba, saya bantu pemesanan pelan-pelan. Boleh nama penerima dulu?"
-    return "Siap Kak, saya bantu pemesanan. Boleh nama penerima dulu?"
+    return deterministic_replies.deterministic_order_reply(raw_text, template_order_form, profile, history)
 
 def deterministic_product_reply(raw_text, profile=None, history=None):
-    lower = html.unescape(str(raw_text or '')).lower().strip()
-    if re.search(r'\b(cara\s+minum|aturan\s+minum|dosis|minum|konsumsi)\b', lower):
-        return "Sukumba diminum 2x sehari sesudah makan, Kak. Bentuknya susu kuda Sumbawa/herbal untuk support stamina, energi, dan vitalitas secara natural. Kalau Kakak mau coba, saya bisa bantu pilihkan paket yang pas."
-    if re.search(r'\b(harga|harganya|berapa|promo|ongkir|cod|paket)\b', lower):
-        return "Untuk harga dan promo Sukumba bisa tergantung paket aktif, Kak. Biasanya ada gratis ongkir, free konsultasi, atau bonus produk lain. Kalau Kakak mau, saya bantu pilihkan paket yang paling pas."
-    if re.search(r'\b(manfaat|khasiat|buat\s+apa|fungsi|kegunaan)\b', lower):
-        return "Sukumba membantu support stamina, energi, daya tahan tubuh, pemulihan tubuh, dan vitalitas pria, Kak. Diminum 2x sehari sesudah makan; klaimnya tetap natural ya, bukan obat penyembuh penyakit. Kalau Kakak mau coba, saya bisa bantu pilihkan paket yang pas."
-    if re.search(r'\b(bentuk|berupa|pil|kapsul|cair|susu)\b', lower):
-        return "Sukumba berupa susu kuda Sumbawa/herbal, Kak, bukan pil. Aturan minumnya 2x sehari sesudah makan, untuk support stamina, energi, dan vitalitas. Kalau Kakak mau coba, saya bisa bantu pilihkan paket yang pas."
+    deps = ProductReplyDeps(
+        is_product_packaging_question=is_product_packaging_question,
+        is_dosage_question=is_dosage_question,
+        is_consumption_question=is_consumption_question,
+        template_estimasi_pengiriman=template_estimasi_pengiriman,
+        template_isi_box=template_isi_box,
+        template_aturan_minum=template_aturan_minum,
+        template_cara_konsumsi=template_cara_konsumsi,
+        template_promo_sukumba=template_promo_sukumba,
+        template_kurir_ongkir=template_kurir_ongkir,
+        template_ongkir_info=template_ongkir_info,
+        template_kurir_info=template_kurir_info,
+        template_halal_info=template_halal_info,
+    )
+    return deterministic_replies.deterministic_product_reply(raw_text, deps, profile, history)
+
+def consultation_need_context(raw_text, profile=None, history=None):
+    haystack = ' '.join([
+        str(raw_text or ''),
+        str((profile or {}).get('complaint', '') if isinstance(profile, dict) else ''),
+        str((profile or {}).get('complaint_detail', '') if isinstance(profile, dict) else ''),
+        str((profile or {}).get('consultation_goal', '') if isinstance(profile, dict) else ''),
+        str((profile or {}).get('consultation_topic', '') if isinstance(profile, dict) else ''),
+        str((profile or {}).get('summary', '') if isinstance(profile, dict) else ''),
+        ' '.join(str(item.get('content', '')) for item in (history or [])[-6:] if isinstance(item, dict)),
+    ]).lower()
+    if re.search(r'\b(pegal|linu|nyeri\s+sendi|nyeri\s+otot|sendi|otot|badan\s+sakit)\b', haystack):
+        return 'pegal/linu'
+    if re.search(r'\b(vitalitas|ereksi|gairah|libido|cepat\s+keluar|ejakulasi|stamina\s+(pria|hubungan|ranjang))\b', haystack):
+        return 'vitalitas'
+    if re.search(r'\b(stamina|kurang\s+tenaga|loyo|letoy|lemas|capek|lelah|mudah\s+drop|drop)\b', haystack):
+        return 'stamina'
+    return ''
+
+def general_sukumba_consult_reply(current, need):
+    age = current.get('age')
+    duration = current.get('duration')
+    need_label = need or 'keluhan'
+    if not age or not duration:
+        return f"Baik Kak, untuk keluhan {need_label} saya bantu arahkan ya. Usia Kakak berapa, dan keluhannya sudah berapa lama?"
+    support = {
+        'pegal/linu': 'support stamina dan pemulihan tubuh',
+        'stamina': 'support stamina dan kondisi tubuh lebih prima',
+        'vitalitas': 'support stamina dan vitalitas pria',
+    }.get(need, 'support stamina, pegal/linu, dan vitalitas')
     return (
-        "Sukumba adalah susu kuda Sumbawa/herbal untuk support stamina, energi, daya tahan tubuh, pemulihan tubuh, dan vitalitas pria, Kak. "
-        "Diminum 2x sehari sesudah makan; promo biasanya ada gratis ongkir, free konsultasi, atau bonus sesuai paket aktif. "
-        "Kalau Kakak mau coba, saya bisa bantu pilihkan paket yang pas."
+        f"Siap Kak, usia {age} dan keluhan {need_label} sudah {duration} ya.\n\n"
+        "Arah awalnya tetap jaga istirahat, makan teratur, cukup minum, dan pantau kondisi tubuh. "
+        f"Sukumba bisa dibantu sebagai {support}, diminum 2x sehari sesudah makan. "
+        "Kalau Kakak mau mulai, saya bisa bantu pilihkan paket yang pas."
     )
 
 def deterministic_male_consult_reply(raw_text, history=None, profile=None):
     lower = html.unescape(str(raw_text or '')).lower().strip()
     history = history or []
+    if is_open_question_request(raw_text):
+        return open_question_reply()
     current = merge_transient_profile(profile, raw_text, 'male_health', history)
     topic = consultation_topic_from_context(raw_text, current, history)
     state = build_conversation_state(current, history)
@@ -1497,6 +1329,10 @@ def deterministic_male_consult_reply(raw_text, history=None, profile=None):
     bp = extract_blood_pressure(raw_text)
     if bp:
         return format_blood_pressure_reply(bp)
+
+    need = consultation_need_context(raw_text, current, history)
+    if need in {'pegal/linu', 'stamina'}:
+        return general_sukumba_consult_reply(current, need)
 
     if is_short_contextual_reply(raw_text) and state.get('active_flow') == 'consultation':
         question_id = state.get('last_question_id')
@@ -1526,6 +1362,12 @@ def deterministic_male_consult_reply(raw_text, history=None, profile=None):
         return (
             "Saya pahami Kak. Kalau mual dan pusing sering muncul, apalagi ada riwayat tensi atau sering begadang, "
             "lebih aman cek tekanan darah dan pola makannya dulu. Biasanya keluhan muncul kapan, dan tensi terakhir berapa?"
+        )
+
+    if re.search(r'\b(begadang|kurang\s+tidur|susah\s+tidur)\b', lower) and male_vitality_context(current, history):
+        return (
+            "Baik Kak, diabetes dan sering begadang bisa ikut memengaruhi stamina dan vitalitas. "
+            "Pola tidur Kakak biasanya berapa jam, merokok atau tidak, dan akhir-akhir ini banyak stres?"
         )
 
     if re.search(r'\b(begadang|kurang\s+tidur|susah\s+tidur)\b', lower):
@@ -1577,9 +1419,11 @@ def deterministic_male_consult_reply(raw_text, history=None, profile=None):
                 "Saya pahami Kak. Biar arahnya lebih pas, pola tidur Kakak gimana, merokok atau tidak, dan akhir-akhir ini banyak stres?"
             )
 
+        duration = current.get('duration')
+        duration_text = f"yang sudah {duration}" if duration else "yang Kakak rasakan"
         return (
-            "Baik Kak. Untuk keluhan yang sudah tahunan, arahnya jaga tidur, kelola stres, makan teratur, dan tetap pantau kondisi tubuh. "
-            "Sukumba bisa dibantu sebagai support stamina dan vitalitas, diminum 2x sehari sesudah makan; kalau Kakak mau mulai, saya sarankan paket 2 box agar programnya jalan."
+            f"Baik Kak. Untuk keluhan {duration_text}, arahnya jaga tidur, kelola stres, makan teratur, dan tetap pantau kondisi tubuh. "
+            "Sukumba bisa dibantu sebagai support stamina dan vitalitas, diminum 2x sehari sesudah makan; kalau Kakak mau mulai, saya bisa bantu pilihkan paket yang pas."
         )
 
     if is_short_acknowledgement(raw_text) and has_male_health_consultation_context(history, current):
@@ -1635,15 +1479,8 @@ def greeting_agent(msg, cfg):
     lower = html.unescape(str(msg or '')).lower()
     if 'semangat pagi' in lower:
         return "Halo Kak, semangat pagi juga. Bisa saya bantu info produk atau konsultasi dulu?"
-    if re.search(r'\b(selamat\s+)?pagi\b', lower):
-        return "Pagi Kak, semoga harinya lancar. Bisa saya bantu info produk atau konsultasi dulu?"
-    if re.search(r'\b(selamat\s+)?siang\b', lower):
-        return "Siang Kak. Bisa saya bantu info produk atau konsultasi dulu?"
-    if re.search(r'\b(selamat\s+)?sore\b', lower):
-        return "Sore Kak. Bisa saya bantu info produk atau konsultasi dulu?"
-    if re.search(r'\b(selamat\s+)?malam\b', lower):
-        return "Malam Kak. Bisa saya bantu info produk atau konsultasi dulu?"
-    return "Halo Kak, selamat datang di Sukumba. Bisa saya bantu info produk atau konsultasi dulu?"
+    greeting = greeting_label_for_message(msg)
+    return f"{greeting} Kak, dengan CS Syifa ya. Kakak mau tanya promo Sukumba atau konsultasi keluhannya dulu?"
 
 def closing_agent(msg, cfg):
     return "Siap Kak, terima kasih. Kalau butuh bantuan lagi, tinggal chat saja."
@@ -1673,6 +1510,12 @@ def male_health_consultant_agent(msg, history, cfg, profile=None, knowledge_cont
         return (
             "Saya pahami Kak. Kalau mual dan pusing sering muncul, apalagi ada riwayat tensi atau sering begadang, "
             "lebih aman cek tekanan darah dan pola makannya dulu. Biasanya keluhan muncul kapan, dan tensi terakhir berapa?"
+        )
+
+    if re.search(r'\b(begadang|kurang\s+tidur|susah\s+tidur)\b', lower) and has_male_health_consultation_context(history, profile):
+        return (
+            "Baik Kak, sering begadang bisa ikut memengaruhi stamina dan vitalitas. "
+            "Pola tidur Kakak biasanya berapa jam, merokok atau tidak, dan akhir-akhir ini banyak stres?"
         )
 
     if re.search(r'\b(begadang|kurang\s+tidur|susah\s+tidur)\b', lower):
@@ -1712,9 +1555,11 @@ Gaya bahasa:
 Flow konsultasi natural:
 - Tanya maksimal 1-2 hal per balasan.
 - Prioritas data: usia, keluhan utama, durasi, diabetes/tensi/jantung/obat rutin, pola tidur, rokok, stres.
+- Ikuti fakta customer apa adanya. Jika customer bilang 1 minggu, jangan ubah menjadi bulanan/tahunan; jika durasi belum disebut, jangan menebak durasi.
+- Jangan menyebut keluhan baru yang belum customer sebut. Gunakan keluhan utama dan durasi dari konteks customer.
 - Kalau data belum cukup, jangan langsung jualan keras.
 - Kalau konteks sudah cukup, berikan edukasi ringan lalu rekomendasi direct.
-- Jangan minta data order di agent konsultasi. Kalau customer siap order, cukup arahkan dengan kalimat: "Siap Kak, saya bantu pemesanan. Boleh nama penerima dulu?"
+- Jangan tanya data order satu per satu. Kalau customer siap order, kirim form order lengkap dan minta customer mengisinya.
 
 Aturan klaim:
 - Jangan overclaim. Hindari kata: menyembuhkan, pasti sembuh, dijamin keras, obat kuat, impoten sembuh total.
@@ -1757,7 +1602,8 @@ Aturan produk:
 - Jawab hanya sesuai pertanyaan customer.
 - Jangan menutup semua jawaban dengan ajakan order. Ajakan order hanya kalau customer bertanya harga/cara pesan atau sudah tampak minat beli.
 - Kalau customer cuma bertanya ringan, akhiri dengan pertanyaan konsultatif yang natural.
-- Jangan minta nama/HP/alamat di Product Agent. Kalau customer sudah ingin order, bilang: "Siap Kak, saya bantu pemesanan. Boleh nama penerima dulu?"
+- Jangan minta nama/HP/alamat satu per satu di Product Agent. Kalau customer sudah ingin order, kirim form order lengkap.
+- Kalau customer bertanya halal, jawab meyakinkan sesuai data: bahan pangan/herbal dan BPOM RI MD 071182004300360. Jangan mengarang nomor sertifikat halal/MUI jika tidak tersedia; tawarkan kirim foto label kemasan/izin produk yang tersedia.
 
 {product_info}
 
@@ -1815,6 +1661,39 @@ Konteks tambahan jika relevan:
     return call_groq(messages, cfg, max_tokens=260)
 
 def orchestrator(msg, history, cfg, profile=None, knowledge_context=''):
+    if is_open_question_request(msg):
+        return (
+            open_question_reply(),
+            'conversation',
+            'open_question_clarifier',
+            {
+                'profile_updates': {
+                    'active_flow': 'triage',
+                    'active_stage': 'awaiting_question_topic',
+                    'last_question_id': 'choose_question_topic',
+                    'pending_slot': 'question_topic',
+                    'last_offer_type': 'choice',
+                    'state_confidence': 'high',
+                }
+            },
+        )
+
+    syifa_template = syifa_template_router(msg, history, profile)
+    if syifa_template:
+        reply, intent, agent, profile_updates = syifa_template
+        logger.info(f"Syifa Template Router: {intent} | Agent: {agent}")
+        meta = {}
+        if isinstance(profile_updates, dict):
+            profile_updates = dict(profile_updates)
+            if profile_updates.pop('start_order', False):
+                meta['start_order'] = True
+            if 'order_prefill' in profile_updates:
+                meta['order_prefill'] = profile_updates.pop('order_prefill')
+            meta['profile_updates'] = profile_updates
+        else:
+            meta['profile_updates'] = {}
+        return reply, intent, agent, meta
+
     state_result = state_engine_precheck(msg, history, cfg, profile, knowledge_context)
     if state_result:
         reply, intent, agent, meta = state_result
@@ -1871,7 +1750,10 @@ def orchestrator(msg, history, cfg, profile=None, knowledge_context=''):
     elif intent == 'post_order':
         logger.info("post_order_ack_agent")
         return "Siap Kak, terima kasih. Tim kami akan segera menghubungi untuk pesanan Kakak.", intent, 'post_order_ack_agent', {}
-    elif intent in ['order_status','complaint','escalation']:
+    elif intent == 'complaint':
+        logger.info("operational_complaint_agent")
+        return operational_complaint_reply(msg), intent, 'operational_complaint_agent', {}
+    elif intent in ['order_status','escalation']:
         logger.info("escalation_agent")
         return escalation_agent(msg, history, cfg), intent, 'escalation_agent', {}
     elif intent == 'product_info':
@@ -1904,7 +1786,7 @@ def ai_chat():
         profile = normalize_profile(data.get('profile', {}))
         knowledge_context = str(data.get('knowledgeContext', '') or '')[:2500]
         
-        logger.info(f"AI Chat: {content[:80]}")
+        logger.info(f"AI Chat: {log_preview(content)}")
         cfg = get_settings()
         early_profile_updates = extract_memory_updates(raw_content, 'general')
         early_profile_updates.update(extract_state_slot_updates(raw_content, profile, history, 'general'))
@@ -1984,7 +1866,7 @@ def ai_chat():
         if should_write_summary(intent, profile_updates):
             memory_summary = update_memory_summary(existing_summary, raw_content, reply, profile_updates, intent, agent, cfg)
         needs_handoff = bool(profile_updates.get('red_flags')) or intent in ['complaint', 'escalation']
-        logger.info(f"Reply: {reply[:80]}")
+        logger.info(f"Reply: {log_preview(reply)}")
         
         meta = {
             'intent': intent,

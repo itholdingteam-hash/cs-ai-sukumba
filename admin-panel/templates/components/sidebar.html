@@ -1,0 +1,38 @@
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">&#x1F434;</div>
+    <div>
+      <div class="logo-text">Sukumba</div>
+      <div class="logo-sub">Command Center</div>
+    </div>
+  </div>
+  <div class="nav-section">Menu</div>
+  <div class="nav-item" onclick="showSection('whatsapp')"><span class="nav-icon">&#x1F4F1;</span> WhatsApp</div>
+  <div class="nav-item" onclick="showSection('products')"><span class="nav-icon">&#x1F4E6;</span> Produk</div>
+  <div class="nav-item" onclick="showSection('faqs')"><span class="nav-icon">&#x2753;</span> FAQ</div>
+  <div class="nav-item" onclick="showSection('testimonials')"><span class="nav-icon">&#x1F5BC;</span> Testimoni</div>
+  <div class="nav-item" onclick="showSection('cs-templates')"><span class="nav-icon">&#x1F4DD;</span> CS Templates</div>
+  <div class="nav-item" onclick="showSection('test')"><span class="nav-icon">&#x1F9EA;</span> Test AI</div>
+  <div class="nav-item" onclick="showSection('prompt')"><span class="nav-icon">&#x270F;&#xFE0F;</span> Prompt Agent
+  </div>
+  <div class="nav-section" style="margin-top:12px">Data</div>
+  <div class="nav-item" onclick="showSection('orders')"><span class="nav-icon">&#x1F6D2;</span> Pesanan <span
+      class="nav-badge" id="new-order-count" style="display:none">0</span></div>
+  <div class="nav-item" onclick="showSection('finance')"><span class="nav-icon">&#x1F4B3;</span> Pembayaran <span
+      class="nav-badge" id="pending-proof-count" style="display:none">0</span></div>
+  <div class="nav-item" onclick="showSection('shipping')"><span class="nav-icon">&#x1F69A;</span> Cek Ongkir</div>
+  <div class="nav-item" onclick="showSection('logs')"><span class="nav-icon">&#x1F4CA;</span> Analitik</div>
+  <div class="nav-section" style="margin-top:12px">System</div>
+  <div class="nav-item" onclick="showSection('settings')"><span class="nav-icon">&#x2699;&#xFE0F;</span> Pengaturan
+  </div>
+  <div class="nav-item" onclick="location.href='/logout'"><span class="nav-icon">&#x1F6AA;</span> Keluar</div>
+  <div class="sidebar-footer">
+    <div class="wa-bar">
+      <div class="dot disconnected" id="sidebar-dot"></div>
+      <div style="min-width:0">
+        <div style="font-weight:600;font-size:12px" id="sidebar-status">Terputus</div>
+        <div style="font-size:10px;color:var(--text3)">WhatsApp</div>
+      </div>
+    </div>
+  </div>
+</aside>

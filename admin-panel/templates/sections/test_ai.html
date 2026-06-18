@@ -1,0 +1,17 @@
+      <!-- TEST AI -->
+      <div class="section" id="section-test">
+        <div class="card">
+          <div class="card-header">
+            <div><div class="card-title">Test AI</div><div class="card-sub">Simulasi percakapan multi-agent</div></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="badge badge-teal" id="agent-badge" style="display:none;font-family:'DM Mono',monospace"></span>
+              <button class="btn btn-ghost btn-sm" onclick="clearChat()">Bersihkan</button>
+            </div>
+          </div>
+          <div class="chat-box" id="chat"><div style="text-align:center;color:var(--text3);font-size:12px;margin:auto">Mulai percakapan...</div></div>
+          <div class="chat-input-row">
+            <input class="input" id="msg" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter')sendMsg()">
+            <button class="btn btn-primary" onclick="sendMsg()">Kirim</button>
+          </div>
+        </div>
+      </div>

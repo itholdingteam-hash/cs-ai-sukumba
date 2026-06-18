@@ -1,0 +1,14 @@
+      <!-- FINANCE -->
+      <div class="section" id="section-finance">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="loadPaymentProofs('',this)">Semua</button>
+          <button class="filter-tab" onclick="loadPaymentProofs('pending',this)">Menunggu cek</button>
+          <button class="filter-tab" onclick="loadPaymentProofs('valid',this)">Valid</button>
+          <button class="filter-tab" onclick="loadPaymentProofs('invalid',this)">Tidak valid</button>
+        </div>
+        <div id="payment-proofs-list"></div>
+        <div class="empty" id="payment-proofs-empty" style="display:none">
+          <div class="empty-icon">&#x1F4B3;</div>
+          <div class="empty-text">Belum ada bukti transfer</div>
+        </div>
+      </div>

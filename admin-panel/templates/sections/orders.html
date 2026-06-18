@@ -1,0 +1,11 @@
+      <!-- ORDERS -->
+      <div class="section" id="section-orders">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="loadOrders('',this)">Semua</button>
+          <button class="filter-tab" onclick="loadOrders('new',this)">&#x1F195; Baru</button>
+          <button class="filter-tab" onclick="loadOrders('process',this)">&#x2699;&#xFE0F; Proses</button>
+          <button class="filter-tab" onclick="loadOrders('done',this)">&#x2705; Selesai</button>
+        </div>
+        <div id="orders-list"></div>
+        <div class="empty" id="orders-empty" style="display:none"><div class="empty-icon">&#x1F6D2;</div><div class="empty-text">Belum ada pesanan</div></div>
+      </div>

@@ -1,16 +1,43 @@
+# Local environment and secrets
 .env
+.env.*
 *.env
+!*.env.example
+!**/.env.example
+
+# Runtime data and generated files
 data/
 backups/
 logs/
+tmp/
+temp/
+admin-panel/static/uploads/
+wa-gateway/auth_info_baileys/
+auth_info_baileys/
+
+# Local databases
 *.db
 *.sqlite
 *.sqlite3
-auth_info_baileys/
-node_modules/
-__pycache__/
-*.pyc
-.DS_Store
 
+# Dependencies and virtual environments
+node_modules/
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs
 *.log
 *.out
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
