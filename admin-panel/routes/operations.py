@@ -367,6 +367,412 @@ def save_conversation_history():
     return jsonify({'success': True})
 
 
+def _profile_map_for_numbers(cursor, numbers):
+    result = {}
+    normalized_numbers = [normalize_wa_number(n) for n in numbers if normalize_wa_number(n)]
+    if not normalized_numbers:
+      return result
+
+    seen = []
+    for number in normalized_numbers:
+        for variant in wa_number_variants(number):
+            if variant not in seen:
+                seen.append(variant)
+
+    placeholders = ','.join(['?'] * len(seen))
+    rows = cursor.execute(
+        f'''SELECT user_number, profile_json, summary, updated_at
+            FROM customer_profiles
+            WHERE user_number IN ({placeholders})''',
+        seen,
+    ).fetchall()
+    for row in rows:
+        try:
+            profile = json.loads(row['profile_json'] or '{}')
+        except Exception:
+            profile = {}
+        item = {
+            'stored_user_number': row['user_number'],
+            'profile': profile,
+            'summary': row['summary'] or '',
+            'updated_at': row['updated_at'] or '',
+        }
+        for variant in wa_number_variants(row['user_number']):
+            result[variant] = item
+    return result
+
+
+def _conversation_score(row):
+    user_message = str(row.get('user_message') or '')
+    ai_response = str(row.get('ai_response') or '')
+    text = f'{user_message} {ai_response}'.lower()
+    score = 92
+    reasons = []
+    if len(ai_response.strip()) < 20:
+        score -= 25
+        reasons.append('Balasan terlalu pendek')
+    if len(ai_response) > 900:
+        score -= 10
+        reasons.append('Balasan terlalu panjang')
+    if re.search(r'\b(maaf|tidak tahu|kurang jelas|gagal|error|tidak bisa)\b', ai_response, re.I):
+        score -= 12
+        reasons.append('Ada sinyal ketidakpastian')
+    if re.search(r'\b(komplain|kecewa|refund|retur|rusak|belum sampai|tidak sampai|marah)\b', text, re.I):
+        score -= 18
+        reasons.append('Ada potensi eskalasi/komplain')
+    if re.search(r'\b(sembuh total|pasti sembuh|jamin sembuh|100%)\b', ai_response, re.I):
+        score -= 30
+        reasons.append('Klaim berisiko')
+    score = max(0, min(100, score))
+    if not reasons:
+        reasons.append('Tidak ada isu besar terdeteksi')
+    if score < 70:
+        status = 'Perlu review'
+    elif score < 85:
+        status = 'Cukup'
+    else:
+        status = 'Baik'
+    return score, status, reasons
+
+
+@operations_bp.route('/api/system-ai/scoring', methods=['GET'])
+@login_required
+def get_system_ai_scoring():
+    limit = request.args.get('limit', 30, type=int)
+    limit = min(max(limit, 1), 100)
+    with get_db() as conn:
+        c = conn.cursor()
+        rows = c.execute('SELECT * FROM conversation_logs ORDER BY id DESC LIMIT ?', (limit,)).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        score, status, reasons = _conversation_score(item)
+        item['score'] = score
+        item['score_status'] = status
+        item['reasons'] = reasons
+        items.append(item)
+    avg = round(sum(item['score'] for item in items) / len(items), 1) if items else 0
+    needs_review = sum(1 for item in items if item['score'] < 70)
+    return jsonify({'items': items, 'average_score': avg, 'needs_review': needs_review})
+
+
+@operations_bp.route('/api/system-ai/memory', methods=['GET'])
+@login_required
+def get_system_ai_memory():
+    limit = request.args.get('limit', 50, type=int)
+    limit = min(max(limit, 1), 100)
+    with get_db() as conn:
+        c = conn.cursor()
+        rows = c.execute('''
+            SELECT cp.user_number, cp.profile_json, cp.summary, cp.updated_at,
+                   latest.role AS latest_role, latest.content AS latest_content, latest.timestamp AS latest_timestamp
+            FROM customer_profiles cp
+            LEFT JOIN (
+                SELECT h.user_number, h.role, h.content, h.timestamp
+                FROM conversation_history h
+                JOIN (
+                    SELECT user_number, MAX(id) AS latest_id
+                    FROM conversation_history
+                    GROUP BY user_number
+                ) pick ON pick.latest_id = h.id
+            ) latest ON latest.user_number = cp.user_number
+            ORDER BY COALESCE(cp.updated_at, '') DESC
+            LIMIT ?
+        ''', (limit,)).fetchall()
+    memories = []
+    for row in rows:
+        try:
+            profile = json.loads(row['profile_json'] or '{}')
+        except Exception:
+            profile = {}
+        memories.append({
+            'user_number': row['user_number'],
+            'summary': row['summary'] or '',
+            'profile': profile,
+            'updated_at': row['updated_at'] or '',
+            'latest_role': row['latest_role'] or '',
+            'latest_content': row['latest_content'] or '',
+            'latest_timestamp': row['latest_timestamp'] or '',
+        })
+    return jsonify({'memories': memories})
+
+
+SYSTEM_AI_ITEM_TYPES = {'learning', 'review', 'skill', 'training'}
+
+
+def _system_ai_item_payload(data, existing=None):
+    existing = existing or {}
+    item_type = str(data.get('item_type') or existing.get('item_type') or '').strip()
+    if item_type not in SYSTEM_AI_ITEM_TYPES:
+        raise ValueError('Tipe item tidak valid')
+    title = str(data.get('title') if 'title' in data else existing.get('title', '')).strip()[:180]
+    if not title:
+        raise ValueError('Judul wajib diisi')
+    return {
+        'item_type': item_type,
+        'title': title,
+        'content': str(data.get('content') if 'content' in data else existing.get('content', '')).strip()[:5000],
+        'status': str(data.get('status') if 'status' in data else existing.get('status', 'draft')).strip()[:40] or 'draft',
+        'tags': str(data.get('tags') if 'tags' in data else existing.get('tags', '')).strip()[:300],
+        'source_user_number': normalize_wa_number(data.get('source_user_number') if 'source_user_number' in data else existing.get('source_user_number', '')),
+        'reviewer_note': str(data.get('reviewer_note') if 'reviewer_note' in data else existing.get('reviewer_note', '')).strip()[:1000],
+    }
+
+
+@operations_bp.route('/api/system-ai/items', methods=['GET'])
+@login_required
+def get_system_ai_items():
+    item_type = str(request.args.get('type') or '').strip()
+    status = str(request.args.get('status') or '').strip()
+    if item_type and item_type not in SYSTEM_AI_ITEM_TYPES:
+        return jsonify({'success': False, 'error': 'Tipe item tidak valid'}), 400
+    where = []
+    params = []
+    if item_type:
+        where.append('item_type=?')
+        params.append(item_type)
+    if status:
+        where.append('status=?')
+        params.append(status)
+    sql = 'SELECT * FROM ai_system_items'
+    if where:
+        sql += ' WHERE ' + ' AND '.join(where)
+    sql += ' ORDER BY id DESC LIMIT 200'
+    with get_db() as conn:
+        c = conn.cursor()
+        rows = c.execute(sql, params).fetchall()
+    return jsonify({'items': [dict(row) for row in rows]})
+
+
+@operations_bp.route('/api/system-ai/items', methods=['POST'])
+@login_required
+def create_system_ai_item():
+    data = request.json or {}
+    try:
+        payload = _system_ai_item_payload(data)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('''INSERT INTO ai_system_items
+                     (item_type, title, content, status, tags, source_user_number, reviewer_note, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (payload['item_type'], payload['title'], payload['content'], payload['status'], payload['tags'],
+                   payload['source_user_number'], payload['reviewer_note'], now, now))
+        item_id = c.lastrowid
+    return jsonify({'success': True, 'id': item_id})
+
+
+@operations_bp.route('/api/system-ai/items/<int:item_id>', methods=['PUT'])
+@login_required
+def update_system_ai_item(item_id):
+    data = request.json or {}
+    with get_db() as conn:
+        c = conn.cursor()
+        row = c.execute('SELECT * FROM ai_system_items WHERE id=?', (item_id,)).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Item tidak ditemukan'}), 404
+        existing = dict(row)
+        try:
+            payload = _system_ai_item_payload(data, existing)
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 400
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        c.execute('''UPDATE ai_system_items
+                     SET title=?, content=?, status=?, tags=?, source_user_number=?, reviewer_note=?, updated_at=?
+                     WHERE id=?''',
+                  (payload['title'], payload['content'], payload['status'], payload['tags'],
+                   payload['source_user_number'], payload['reviewer_note'], now, item_id))
+    return jsonify({'success': True})
+
+
+@operations_bp.route('/api/system-ai/items/<int:item_id>', methods=['DELETE'])
+@login_required
+def delete_system_ai_item(item_id):
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('DELETE FROM ai_system_items WHERE id=?', (item_id,))
+    return jsonify({'success': True})
+
+
+@operations_bp.route('/api/conversation/recent', methods=['GET'])
+@login_required
+def get_recent_conversations():
+    limit = request.args.get('limit', 30, type=int)
+    limit = min(max(limit, 1), 100)
+    with get_db() as conn:
+        c = conn.cursor()
+        rows = c.execute('''
+            SELECT h.user_number, h.role, h.content, h.timestamp, h.id, counts.message_count
+            FROM conversation_history h
+            JOIN (
+                SELECT user_number, MAX(id) AS latest_id, COUNT(*) AS message_count
+                FROM conversation_history
+                WHERE COALESCE(user_number, '') != ''
+                GROUP BY user_number
+                ORDER BY latest_id DESC
+                LIMIT ?
+            ) counts ON counts.latest_id = h.id
+            ORDER BY h.id DESC
+        ''', (limit,)).fetchall()
+        profile_map = _profile_map_for_numbers(c, [row['user_number'] for row in rows])
+
+    conversations = []
+    for row in rows:
+        normalized = normalize_wa_number(row['user_number']) or row['user_number']
+        profile_item = profile_map.get(normalized) or profile_map.get(row['user_number']) or {}
+        profile = profile_item.get('profile') or {}
+        conversations.append({
+            'user_number': row['user_number'],
+            'normalized_user_number': normalized,
+            'latest_role': row['role'] or '',
+            'latest_content': row['content'] or '',
+            'latest_timestamp': row['timestamp'] or '',
+            'message_count': row['message_count'] or 0,
+            'human_handoff_active': bool(profile.get('human_handoff_active')),
+            'handoff_note': profile.get('handoff_note') or '',
+            'handoff_updated_at': profile.get('handoff_updated_at') or '',
+            'summary': profile_item.get('summary') or '',
+        })
+    return jsonify({'conversations': conversations})
+
+
+@operations_bp.route('/api/human-handoff/<user_number>', methods=['POST'])
+@login_required
+def set_human_handoff(user_number):
+    data = request.json or {}
+    active = bool(data.get('active'))
+    note = str(data.get('note') or '').strip()[:500]
+    normalized = normalize_wa_number(user_number)
+    if not normalized:
+        return jsonify({'success': False, 'error': 'Nomor WA tidak valid'}), 400
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    variants = wa_number_variants(normalized)
+    placeholders = ','.join(['?'] * len(variants))
+    with get_db() as conn:
+        c = conn.cursor()
+        row = c.execute(f'''SELECT user_number, profile_json, summary, created_at
+                            FROM customer_profiles
+                            WHERE user_number IN ({placeholders})
+                            ORDER BY CASE WHEN user_number=? THEN 0 ELSE 1 END
+                            LIMIT 1''', (*variants, normalized)).fetchone()
+        if row:
+            try:
+                profile = json.loads(row['profile_json'] or '{}')
+            except Exception:
+                profile = {}
+            created_at = row['created_at'] or now
+            summary = row['summary'] or ''
+        else:
+            profile = {}
+            created_at = now
+            summary = ''
+
+        profile['human_handoff_active'] = active
+        profile['handoff_note'] = note
+        profile['handoff_updated_at'] = now
+        profile['active_flow'] = 'human_handoff' if active else profile.get('active_flow', '')
+        profile['active_stage'] = 'cs_organik' if active else profile.get('active_stage', '')
+        if not active:
+            profile['active_flow'] = 'conversation'
+            profile['active_stage'] = 'ai_active'
+
+        c.execute(f'''DELETE FROM customer_profiles
+                      WHERE user_number IN ({placeholders}) AND user_number != ?''',
+                  (*variants, normalized))
+        c.execute('''INSERT OR REPLACE INTO customer_profiles
+                     (user_number, profile_json, summary, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?)''',
+                  (normalized, json.dumps(profile, ensure_ascii=False), summary, created_at, now))
+        c.execute('INSERT INTO conversation_history (user_number, role, content, timestamp) VALUES (?, ?, ?, ?)',
+                  (normalized, 'system_note',
+                   'Handover ke CS Organik aktif.' if active else 'Handover selesai. AI aktif kembali.',
+                   now))
+
+    return jsonify({'success': True, 'user_number': normalized, 'active': active, 'updated_at': now})
+
+
+@operations_bp.route('/api/human-handoffs', methods=['GET'])
+@login_required
+def get_human_handoffs():
+    with get_db() as conn:
+        c = conn.cursor()
+        rows = c.execute('SELECT user_number, profile_json, summary, updated_at FROM customer_profiles').fetchall()
+        active_numbers = []
+        profiles = {}
+        for row in rows:
+            try:
+                profile = json.loads(row['profile_json'] or '{}')
+            except Exception:
+                profile = {}
+            if profile.get('human_handoff_active'):
+                number = row['user_number']
+                active_numbers.append(number)
+                profiles[number] = {
+                    'profile': profile,
+                    'summary': row['summary'] or '',
+                    'updated_at': row['updated_at'] or '',
+                }
+        latest = {}
+        if active_numbers:
+            placeholders = ','.join(['?'] * len(active_numbers))
+            for row in c.execute(f'''
+                SELECT h.user_number, h.role, h.content, h.timestamp
+                FROM conversation_history h
+                JOIN (
+                    SELECT user_number, MAX(id) AS latest_id
+                    FROM conversation_history
+                    WHERE user_number IN ({placeholders})
+                    GROUP BY user_number
+                ) latest ON latest.latest_id = h.id
+            ''', active_numbers).fetchall():
+                latest[row['user_number']] = dict(row)
+
+    items = []
+    for number in active_numbers:
+        profile = profiles[number]['profile']
+        last = latest.get(number, {})
+        items.append({
+            'user_number': number,
+            'summary': profiles[number]['summary'],
+            'handoff_note': profile.get('handoff_note') or '',
+            'handoff_updated_at': profile.get('handoff_updated_at') or profiles[number]['updated_at'],
+            'latest_role': last.get('role', ''),
+            'latest_content': last.get('content', ''),
+            'latest_timestamp': last.get('timestamp', ''),
+        })
+    items.sort(key=lambda item: item.get('latest_timestamp') or item.get('handoff_updated_at') or '', reverse=True)
+    return jsonify({'handoffs': items})
+
+
+@operations_bp.route('/api/manual-reply', methods=['POST'])
+@login_required
+def send_manual_reply():
+    data = request.json or {}
+    raw_number = str(data.get('user_number') or '').strip()
+    message = str(data.get('message') or '').strip()
+    user_number = normalize_wa_number(raw_number)
+    if not user_number:
+        return jsonify({'success': False, 'error': 'Nomor WA tidak valid'}), 400
+    if not message:
+        return jsonify({'success': False, 'error': 'Pesan tidak boleh kosong'}), 400
+    if len(message) > 4000:
+        return jsonify({'success': False, 'error': 'Pesan terlalu panjang'}), 400
+
+    sent, error = _send_wa_message(raw_number or user_number, message)
+    if not sent:
+        return jsonify({'success': False, 'error': error or 'WA gateway tidak tersedia'}), 502
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('INSERT INTO conversation_history (user_number, role, content, timestamp) VALUES (?, ?, ?, ?)',
+                  (user_number, 'assistant', message, now))
+    return jsonify({'success': True, 'user_number': user_number, 'sent_at': now})
+
+
 @operations_bp.route('/api/conversation/history/<user_number>', methods=['DELETE'])
 @require_internal_auth
 def clear_conversation_history(user_number):

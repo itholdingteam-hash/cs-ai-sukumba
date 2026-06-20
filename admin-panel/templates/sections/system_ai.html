@@ -1,0 +1,305 @@
+      <!-- SISTEM AI -->
+      <div class="section" id="section-system-ai">
+        <div class="system-ai-workspace">
+          <header class="system-ai-page-head">
+            <h2>Sistem AI</h2>
+            <p>Memory, learning, skill, review, scoring, handoff, dan training inbox</p>
+          </header>
+
+          <div class="system-ai-tabs" aria-label="Tab Sistem AI">
+            <button class="system-ai-tab-card active" type="button" onclick="showSystemAiTab('memory-per-customer', this)">
+              <span class="system-ai-tab-index">01</span>
+              <span>Memory Per Customer</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('learning-bank', this)">
+              <span class="system-ai-tab-index">02</span>
+              <span>Learning Bank</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('skill-system', this)">
+              <span class="system-ai-tab-index">03</span>
+              <span>Skill System</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('review-approval', this)">
+              <span class="system-ai-tab-index">04</span>
+              <span>Review &amp; Approval</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('conversation-scoring', this)">
+              <span class="system-ai-tab-index">05</span>
+              <span>Conversation Scoring</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('human-handoff', this)">
+              <span class="system-ai-tab-index">06</span>
+              <span>Human Handoff</span>
+            </button>
+            <button class="system-ai-tab-card" type="button" onclick="showSystemAiTab('training-inbox', this)">
+              <span class="system-ai-tab-index">07</span>
+              <span>Training Inbox</span>
+            </button>
+          </div>
+
+          <div class="system-ai-panel active" data-system-ai-tab="memory-per-customer">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">Memory Per Customer</div>
+                <h3>Customer Memory Center</h3>
+                <p>Kelola ingatan AI per nomor WhatsApp: summary, profil customer, konteks keluhan, stage follow up, dan riwayat chat terakhir.</p>
+              </div>
+              <div class="system-ai-readme-search">
+                <input class="input" id="system-ai-memory-search" placeholder="Cari nomor WA / nama / keluhan" oninput="filterSystemAiMemoryList()">
+                <button class="btn btn-primary" type="button" onclick="filterSystemAiMemoryList()">Cari</button>
+              </div>
+            </section>
+
+            <div class="system-ai-memory-stats">
+              <div class="system-ai-stat-tile"><strong id="system-ai-memory-total">0</strong><span>Customer memory</span></div>
+              <div class="system-ai-stat-tile"><strong id="system-ai-memory-selected-number">-</strong><span>Nomor terpilih</span></div>
+              <div class="system-ai-stat-tile"><strong id="system-ai-memory-history-count">0</strong><span>History chat</span></div>
+            </div>
+
+            <div class="system-ai-memory-center">
+              <aside class="system-ai-memory-list-panel">
+                <div class="system-ai-panel-head">
+                  <h4>Daftar Customer</h4>
+                  <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiMemory()">Refresh</button>
+                </div>
+                <div id="system-ai-memory-list" class="system-ai-memory-list"></div>
+              </aside>
+
+              <section class="system-ai-memory-detail">
+                <div class="system-ai-panel-head">
+                  <h4>Detail Memory</h4>
+                  <button class="btn btn-danger btn-sm" type="button" onclick="resetSelectedSystemAiMemory()">Reset Memory</button>
+                </div>
+
+                <div class="system-ai-memory-form">
+                  <div class="form-row">
+                    <label class="label">Nomor WA</label>
+                    <input class="input" id="system-ai-memory-number" readonly>
+                  </div>
+                  <div class="form-row">
+                    <label class="label">Nama</label>
+                    <input class="input" id="system-ai-memory-name" placeholder="Nama customer">
+                  </div>
+                  <div class="form-row">
+                    <label class="label">Usia</label>
+                    <input class="input" id="system-ai-memory-age" placeholder="Contoh: 35">
+                  </div>
+                  <div class="form-row">
+                    <label class="label">Keluhan Utama</label>
+                    <input class="input" id="system-ai-memory-complaint" placeholder="Contoh: pegal linu">
+                  </div>
+                  <div class="form-row">
+                    <label class="label">Stage Follow Up</label>
+                    <input class="input" id="system-ai-memory-stage" placeholder="Contoh: product_explaining">
+                  </div>
+                  <div class="form-row">
+                    <label class="label">Keberatan</label>
+                    <input class="input" id="system-ai-memory-objection" placeholder="Contoh: mahal / belum yakin / tanya BPOM">
+                  </div>
+                  <div class="form-row system-ai-memory-summary">
+                    <label class="label">Summary Memory</label>
+                    <textarea class="textarea" id="system-ai-memory-summary" rows="5" placeholder="Ringkasan konteks customer..."></textarea>
+                  </div>
+                </div>
+
+                <div class="system-ai-memory-actions">
+                  <button class="btn btn-primary" type="button" onclick="saveSystemAiMemoryDetail()">Simpan Memory</button>
+                  <button class="btn btn-ghost" type="button" onclick="reloadSelectedSystemAiMemory()">Muat Ulang</button>
+                </div>
+
+                <div class="system-ai-memory-block">
+                  <h4>Profile Keys</h4>
+                  <div class="system-ai-profile-keys" id="system-ai-memory-profile-keys"></div>
+                </div>
+
+                <div class="system-ai-memory-block">
+                  <h4>History Terakhir</h4>
+                  <div class="system-ai-memory-history" id="system-ai-memory-history"></div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="learning-bank">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Learning Bank</h3>
+                <p>Bank pembelajaran untuk menyimpan insight dari percakapan yang sering muncul dan bisa dipakai memperbaiki AI.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Mengubah chat harian menjadi bahan belajar yang terstruktur untuk FAQ, template, prompt, dan skill.</span></div>
+                <div><strong>Nanti berisi</strong><span>Pertanyaan berulang, jawaban terbaik, keberatan customer, pola closing, kata kunci baru, dan insight produk.</span></div>
+                <div><strong>Manfaat</strong><span>AI bisa terus diperbaiki dari data nyata, bukan hanya dari tebakan awal.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Learning Bank</div>
+                  <div class="card-sub">Simpan pengetahuan yang sudah aman dipakai AI sebagai referensi internal.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiItems('learning')">Muat Ulang</button>
+              </div>
+              <div class="system-ai-editor">
+                <input class="input" id="system-ai-learning-title" placeholder="Judul knowledge, contoh: Jawaban untuk komplain paket terlambat">
+                <textarea class="textarea" id="system-ai-learning-content" rows="4" placeholder="Isi pembelajaran atau jawaban ideal..."></textarea>
+                <input class="input" id="system-ai-learning-tags" placeholder="Tag, contoh: komplain, pengiriman, refund">
+                <button class="btn btn-primary" type="button" onclick="createSystemAiItem('learning')">Simpan ke Learning Bank</button>
+              </div>
+              <div id="system-ai-learning-list" class="system-ai-item-list"></div>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="skill-system">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Skill System</h3>
+                <p>Kumpulan kemampuan khusus AI agar cara menjawab bisa disesuaikan dengan jenis situasi customer.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Membagi kemampuan AI menjadi modul yang jelas seperti konsultasi, edukasi produk, closing, komplain, dan follow up.</span></div>
+                <div><strong>Nanti berisi</strong><span>Daftar skill aktif, aturan pemakaian skill, contoh respons, trigger intent, dan batasan jawaban.</span></div>
+                <div><strong>Manfaat</strong><span>AI lebih konsisten karena tidak semua chat dijawab dengan gaya dan strategi yang sama.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Skill System</div>
+                  <div class="card-sub">Kelola skill, trigger, dan batasan workflow AI.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiItems('skill')">Muat Ulang</button>
+              </div>
+              <div class="system-ai-editor">
+                <input class="input" id="system-ai-skill-title" placeholder="Nama skill, contoh: Deteksi komplain pengiriman">
+                <textarea class="textarea" id="system-ai-skill-content" rows="4" placeholder="Trigger, aturan pakai, dan batasan skill..."></textarea>
+                <input class="input" id="system-ai-skill-tags" placeholder="Trigger/tag, contoh: komplain, paket, resi">
+                <button class="btn btn-primary" type="button" onclick="createSystemAiItem('skill')">Tambah Skill</button>
+              </div>
+              <div id="system-ai-skill-list" class="system-ai-item-list"></div>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="review-approval">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Review &amp; Approval</h3>
+                <p>Ruang validasi admin sebelum hasil belajar AI masuk ke knowledge base, FAQ, template, prompt, atau skill.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Menjaga agar AI tidak otomatis belajar hal yang salah, berisiko, atau belum disetujui tim.</span></div>
+                <div><strong>Nanti berisi</strong><span>Antrian insight, status pending/approved/rejected, catatan reviewer, dan riwayat perubahan.</span></div>
+                <div><strong>Manfaat</strong><span>AI bisa berkembang, tapi tetap ada kontrol manusia sebelum perubahan dipakai di percakapan nyata.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Review &amp; Approval</div>
+                  <div class="card-sub">Tinjau kandidat training sebelum masuk ke Learning Bank.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiItems('review')">Muat Ulang</button>
+              </div>
+              <div class="system-ai-editor">
+                <input class="input" id="system-ai-review-title" placeholder="Judul review">
+                <textarea class="textarea" id="system-ai-review-content" rows="4" placeholder="Materi yang perlu dicek reviewer..."></textarea>
+                <input class="input" id="system-ai-review-tags" placeholder="Tag/kategori">
+                <button class="btn btn-primary" type="button" onclick="createSystemAiItem('review')">Tambah Review</button>
+              </div>
+              <div id="system-ai-review-list" class="system-ai-item-list"></div>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="conversation-scoring">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Conversation Scoring</h3>
+                <p>Sistem penilaian kualitas percakapan untuk melihat apakah AI menjawab dengan benar, aman, dan efektif.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Memberi skor pada chat berdasarkan relevansi, empati, akurasi, peluang closing, dan risiko jawaban.</span></div>
+                <div><strong>Nanti berisi</strong><span>Skor per percakapan, alasan skor, indikator masalah, rekomendasi perbaikan, dan tren performa.</span></div>
+                <div><strong>Manfaat</strong><span>Tim bisa tahu bagian mana yang perlu dilatih tanpa membaca semua chat satu per satu.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Conversation Scoring</div>
+                  <div class="card-sub">Pantau kualitas jawaban AI dan kirim kasus bermasalah ke Training Inbox.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiScoring()">Muat Ulang</button>
+              </div>
+              <div class="stats-grid system-ai-stats">
+                <div class="stat-card teal"><div class="stat-label">Rata-rata Skor</div><div class="stat-value" id="system-ai-score-average">&mdash;</div><div class="stat-trend">100 = sangat baik</div><div class="stat-icon">%</div></div>
+                <div class="stat-card blue"><div class="stat-label">Dicek</div><div class="stat-value" id="system-ai-score-count">&mdash;</div><div class="stat-trend">Percakapan terakhir</div><div class="stat-icon">#</div></div>
+                <div class="stat-card green"><div class="stat-label">Perlu Review</div><div class="stat-value" id="system-ai-score-review">&mdash;</div><div class="stat-trend">Skor di bawah 70</div><div class="stat-icon">!</div></div>
+              </div>
+              <div id="system-ai-scoring-list" class="system-ai-chat-list"></div>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="human-handoff">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Human Handoff</h3>
+                <p>Mekanisme eskalasi dari AI ke CS manusia ketika percakapan tidak cocok ditangani otomatis.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Memastikan kasus sensitif, komplain, red flag, pembayaran, atau customer panas segera ditangani manusia.</span></div>
+                <div><strong>Nanti berisi</strong><span>Daftar tiket handoff, alasan eskalasi, prioritas, status penanganan, owner CS, dan catatan follow up.</span></div>
+                <div><strong>Manfaat</strong><span>AI tetap membantu, tapi tidak memaksa menjawab saat konteksnya perlu keputusan manusia.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Human Handoff</div>
+                  <div class="card-sub">Antrian percakapan yang sedang dipegang manusia.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiHandoffs()">Muat Ulang</button>
+              </div>
+              <div id="system-ai-handoff-list" class="system-ai-chat-list"></div>
+              <div class="empty" id="system-ai-handoff-empty" style="display:none">
+                <div class="empty-text">Belum ada chat yang sedang dipegang CS Organik.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="system-ai-panel" data-system-ai-tab="training-inbox">
+            <section class="system-ai-readme">
+              <div>
+                <div class="system-ai-readme-kicker">README</div>
+                <h3>Training Inbox</h3>
+                <p>Inbox khusus untuk mengumpulkan bahan training dari percakapan yang perlu diperbaiki atau dijadikan contoh.</p>
+              </div>
+              <div class="system-ai-readme-grid">
+                <div><strong>Tujuan</strong><span>Mengumpulkan chat gagal, pertanyaan belum terjawab, koreksi manusia, dan kandidat materi baru.</span></div>
+                <div><strong>Nanti berisi</strong><span>Item training, sumber chat, label masalah, usulan jawaban, status review, dan aksi kirim ke Learning Bank.</span></div>
+                <div><strong>Manfaat</strong><span>Proses melatih AI jadi lebih rapi karena semua bahan masuk ke satu tempat sebelum diproses.</span></div>
+              </div>
+            </section>
+            <div class="card system-ai-card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Training Inbox</div>
+                  <div class="card-sub">Kumpulkan kasus percakapan yang perlu dijadikan bahan training.</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="loadSystemAiItems('training')">Muat Ulang</button>
+              </div>
+              <div class="system-ai-editor">
+                <input class="input" id="system-ai-training-title" placeholder="Judul training case">
+                <textarea class="textarea" id="system-ai-training-content" rows="4" placeholder="Masukkan potongan chat, masalah, dan jawaban yang diharapkan..."></textarea>
+                <input class="input" id="system-ai-training-tags" placeholder="Label masalah, contoh: low-score, klaim, komplain">
+                <button class="btn btn-primary" type="button" onclick="createSystemAiItem('training')">Tambah Training Case</button>
+              </div>
+              <div id="system-ai-training-list" class="system-ai-item-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>

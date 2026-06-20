@@ -228,4 +228,13 @@ def default_settings(telegram_bot_token=''):
             'Kamu Customer Care Sukumba. Tangani komplain dengan empati. Minta maaf, '
             'kumpulkan detail masalah (no order, tanggal beli), informasikan tim akan '
             'follow up segera. Maksimal 3 kalimat.',
+        'wa_safety_guard_enabled': '1',
+        'wa_safety_auto_reply_paused': '0',
+        'wa_safety_manual_only': '0',
+        'wa_safety_min_delay_seconds': '20',
+        'wa_safety_max_delay_seconds': '90',
+        'wa_safety_daily_auto_limit': '50',
+        'wa_safety_append_optout': '1',
+        'wa_safety_block_new_outbound': '1',
+        'wa_safety_risky_words': 'pasti sembuh,100% sembuh,dijamin sembuh,gratis klik sekarang,buruan sebelum habis',
     }

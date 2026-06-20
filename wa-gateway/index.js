@@ -126,6 +126,10 @@ let connectionGeneration = 0;
 let reconnectTimer = null;
 let readyTimer = null;
 let lastQRLogAt = 0;
+let safetySettingsCache = null;
+let safetySettingsLoadedAt = 0;
+let autoReplyCounterDate = '';
+let autoReplyCounter = 0;
 const SESSION_FILE = process.env.ORDER_SESSION_FILE || '/app/data/order_sessions.json';
 fs.mkdirSync(path.dirname(SESSION_FILE), { recursive: true });
 let orderSessions = {};
@@ -680,6 +684,18 @@ function operationalComplaintReply(text) {
   return 'Mohon maaf ya Kak atas kendalanya. Boleh ceritakan detail masalahnya dan kirim nomor order/nama penerima jika ada? CS Syifa teruskan ke admin supaya bisa dibantu cek dan follow up.';
 }
 
+function isTechnicalIssue(text) {
+  const lower = String(text || '').toLowerCase().trim();
+  if (!lower) return false;
+  const technicalContext = /\b(wa|whatsapp|chat|pesan|message|nomor|bot|ai|cs\s*ai|sistem|server|gateway|aplikasi|dashboard)\b/i.test(lower);
+  const technicalProblem = /\b(disconnect|disconnected|terputus|putus|logout|keluar|error|eror|gangguan|kendala|trouble|bermasalah|tidak\s+bisa|nggak\s+bisa|gak\s+bisa|ga\s+bisa|tidak\s+masuk|belum\s+masuk|tidak\s+terkirim|gagal\s+kirim|pending|delay|lambat|lemot|loading|offline|down)\b/i.test(lower);
+  return technicalContext && technicalProblem;
+}
+
+function technicalIssueReply() {
+  return 'Mohon maaf ya Kak, sepertinya sedang ada kendala teknis pada sistem chat kami. CS Syifa bantu teruskan ke admin untuk dicek.\n\nKalau pesan Kakak belum terbalas atau sempat gagal terkirim, boleh kirim ulang sebentar lagi ya. Kalau urgent, tuliskan kebutuhan Kakak di chat ini agar admin bisa follow up manual.';
+}
+
 async function getHistory(userNumber) {
   try {
     const res = await axios.get(`${ADMIN_URL}/api/conversation/history/${userNumber}?limit=${MAX_HISTORY}`, axiosConfig);
@@ -696,9 +712,180 @@ async function saveHistory(userNumber, role, content) {
   } catch(e) {}
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function boolSetting(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value) === '1' || String(value).toLowerCase() === 'true';
+}
+
+function intSetting(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function numberSetting(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function randomBetween(min, max) {
+  const safeMin = Math.max(0, Number(min) || 0);
+  const safeMax = Math.max(safeMin, Number(max) || safeMin);
+  return safeMin + Math.random() * (safeMax - safeMin);
+}
+
+async function getSafetySettings() {
+  const now = Date.now();
+  if (safetySettingsCache && now - safetySettingsLoadedAt < 30000) return safetySettingsCache;
+  try {
+    const res = await axios.get(`${ADMIN_URL}/api/public/settings`, axiosConfig);
+    safetySettingsCache = res.data || {};
+    safetySettingsLoadedAt = now;
+  } catch(e) {
+    safetySettingsCache = safetySettingsCache || {};
+  }
+  return safetySettingsCache || {};
+}
+
+function riskyWordList(settings) {
+  return String(settings.wa_safety_risky_words || '')
+    .split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function sanitizeOutboundText(text, settings) {
+  let output = String(text || '').trim();
+  riskyWordList(settings).forEach(word => {
+    if (!word) return;
+    const pattern = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
+    output = output.replace(pattern, '[disesuaikan]');
+  });
+  if (boolSetting(settings.wa_safety_append_optout, true) && !/\b(stop|berhenti)\b/i.test(output)) {
+    output += '\n\nKalau tidak berkenan menerima pesan lanjutan, balas STOP ya Kak.';
+  }
+  return output;
+}
+
+async function safetyDelay(settings) {
+  if (!boolSetting(settings.wa_safety_guard_enabled, true)) return;
+  const minSec = Math.max(0, intSetting(settings.wa_safety_min_delay_seconds, 20));
+  const maxSec = Math.max(minSec, intSetting(settings.wa_safety_max_delay_seconds, 90));
+  const waitMs = (minSec + Math.random() * (maxSec - minSec)) * 1000;
+  if (waitMs > 0) await sleep(waitMs);
+}
+
+function typingDelayConfig(settings) {
+  return {
+    enabled: boolSetting(
+      settings.wa_typing_delay_enabled ?? process.env.WA_TYPING_DELAY_ENABLED,
+      true
+    ),
+    typingMinSec: Math.max(0, numberSetting(
+      settings.wa_typing_min_seconds ?? process.env.WA_TYPING_MIN_SECONDS,
+      15
+    )),
+    typingMaxSec: Math.max(0, numberSetting(
+      settings.wa_typing_max_seconds ?? process.env.WA_TYPING_MAX_SECONDS,
+      60
+    )),
+    sendMinSec: Math.max(0, numberSetting(
+      settings.wa_send_delay_min_seconds ?? process.env.WA_SEND_DELAY_MIN_SECONDS,
+      10
+    )),
+    sendMaxSec: Math.max(0, numberSetting(
+      settings.wa_send_delay_max_seconds ?? process.env.WA_SEND_DELAY_MAX_SECONDS,
+      15
+    )),
+    refreshMs: Math.max(3000, intSetting(
+      settings.wa_typing_refresh_ms ?? process.env.WA_TYPING_REFRESH_MS,
+      8000
+    )),
+  };
+}
+
+async function keepTypingFor(sock, jid, durationMs, refreshMs) {
+  if (durationMs <= 0) return;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < durationMs) {
+    try {
+      await sock.sendPresenceUpdate('composing', jid);
+    } catch (e) {
+      log('WARN', `Failed sending typing presence: ${e.message || e}`);
+      await sleep(durationMs - (Date.now() - startedAt));
+      return;
+    }
+    const remainingMs = durationMs - (Date.now() - startedAt);
+    await sleep(Math.min(refreshMs, Math.max(0, remainingMs)));
+  }
+}
+
+async function autoReplyTypingDelay(sock, jid, settings) {
+  const cfg = typingDelayConfig(settings);
+  if (!cfg.enabled) {
+    await safetyDelay(settings);
+    return;
+  }
+
+  const typingMin = Math.min(cfg.typingMinSec, cfg.typingMaxSec);
+  const typingMax = Math.max(cfg.typingMinSec, cfg.typingMaxSec);
+  const sendMin = Math.min(cfg.sendMinSec, cfg.sendMaxSec);
+  const sendMax = Math.max(cfg.sendMinSec, cfg.sendMaxSec);
+  const typingMs = Math.round(randomBetween(typingMin, typingMax) * 1000);
+  const sendDelayMs = Math.round(randomBetween(sendMin, sendMax) * 1000);
+  const totalMs = typingMs + sendDelayMs;
+
+  log('INFO', `Auto-reply typing delay ${Math.round(typingMs / 1000)}s + send delay ${Math.round(sendDelayMs / 1000)}s for ${jid}`);
+  await keepTypingFor(sock, jid, totalMs, cfg.refreshMs);
+}
+
+function canSendAutoReply(settings) {
+  if (!boolSetting(settings.wa_safety_guard_enabled, true)) return { ok: true };
+  if (boolSetting(settings.wa_safety_auto_reply_paused, false)) return { ok: false, reason: 'auto_reply_paused' };
+  if (boolSetting(settings.wa_safety_manual_only, false)) return { ok: false, reason: 'manual_only' };
+  const today = todayKey();
+  if (autoReplyCounterDate !== today) {
+    autoReplyCounterDate = today;
+    autoReplyCounter = 0;
+  }
+  const limit = Math.max(1, intSetting(settings.wa_safety_daily_auto_limit, 50));
+  if (autoReplyCounter >= limit) return { ok: false, reason: 'daily_limit' };
+  return { ok: true };
+}
+
+async function sendCustomerTextAndRemember(sock, from, senderNumber, text, options = {}) {
+  const settings = await getSafetySettings();
+  const isManual = options.manual === true;
+  if (!isManual) {
+    const gate = canSendAutoReply(settings);
+    if (!gate.ok) {
+      await saveHistory(senderNumber, 'system_note', `Auto-reply ditahan WA Safety Guard: ${gate.reason}`);
+      log('WARN', `WA Safety Guard held auto reply for ${senderNumber}: ${gate.reason}`);
+      return false;
+    }
+    await autoReplyTypingDelay(sock, from, settings);
+  }
+  const safeText = boolSetting(settings.wa_safety_guard_enabled, true)
+    ? sanitizeOutboundText(text, settings)
+    : String(text || '').trim();
+  await sock.sendMessage(from, { text: safeText });
+  try {
+    await sock.sendPresenceUpdate('paused', from);
+  } catch (e) {}
+  await saveHistory(senderNumber, isManual ? 'assistant' : 'assistant', safeText);
+  if (!isManual) autoReplyCounter++;
+  return true;
+}
+
 async function sendTextAndRemember(sock, from, senderNumber, text) {
-  await sock.sendMessage(from, { text });
-  await saveHistory(senderNumber, 'assistant', text);
+  return sendCustomerTextAndRemember(sock, from, senderNumber, text);
 }
 
 function incomingMessageText(message) {
@@ -1011,7 +1198,17 @@ function halalReply() {
 }
 
 function isTestimonialRequest(text) {
-  return /\b(testimoni|testimomi|testimonial|review|ulasan|bukti|hasil)\b/i.test(String(text || ''));
+  return /\b(testi|testimoni|testimomi|testimonial|review|ulasan|bukti|hasil)\b/i.test(String(text || ''));
+}
+
+function lastAssistantHasTestimonialContext(history = []) {
+  const lastAI = [...(history || [])].reverse().find(h => h.role === 'assistant');
+  return !!(lastAI && /\b(testi|testimoni|testimonial|review|ulasan|bukti|hasil)\b/i.test(lastAI.content || ''));
+}
+
+function isTestimonialFollowup(text, history = []) {
+  return /\b(lain|lainnya|yang\s+lain|testi\s+lain|testimoni\s+lain|review\s+lain|bukti\s+lain)\b/i.test(String(text || ''))
+    && lastAssistantHasTestimonialContext(history);
 }
 
 function productPackagingReply() {
@@ -1061,6 +1258,9 @@ function hasPostOrderContext(history = [], profile = {}) {
 
 function localSafeFallbackReply(text, history = [], profile = {}) {
   const lower = String(text || '').toLowerCase().trim();
+  if (isTechnicalIssue(lower)) {
+    return technicalIssueReply();
+  }
   if (hasPostOrderContext(history, profile) && /^(ok|oke|baik|siap|iya|ya|sip|noted)[.!?]*$/i.test(lower)) {
     return 'Baik Kak, terima kasih. CS Syifa teruskan pesanan Kakak ke tim kami ya.';
   }
@@ -1082,7 +1282,7 @@ function localSafeFallbackReply(text, history = [], profile = {}) {
   if (isShippingEstimateQuestion(lower)) {
     return 'Untuk pengiriman biasanya memakai JNE REG ya Kak, estimasi sampai sekitar 4-7 hari kerja setelah paket diproses.\n\nKalau Kakak ingin cek ongkir, boleh kirim kecamatan, kabupaten/kota, dan provinsinya dulu ya.';
   }
-  if (isTestimonialRequest(lower)) {
+  if (isTestimonialRequest(lower) || isTestimonialFollowup(lower, history)) {
     return 'Boleh Kak, saya kirimkan testimoni customer SUKUMBA ya.';
   }
   if (isShortPurchaseRequest(lower) && (lastAssistantHasProductContext(history) || (profile && profile.active_flow === 'product') || hasPostOrderContext(history, profile))) {
@@ -1097,7 +1297,7 @@ function localSafeFallbackReply(text, history = [], profile = {}) {
     }
     return 'Saya CS Sukumba, Kak. Saya bantu info produk dan konsultasi seputar stamina/kesehatan pria dengan bahasa yang tetap nyaman.';
   }
-  if (/\b(jualan|produk|jual\s+apa|menjual|harga|harganya|khasiat|manfaat|kandungan|cara\s+minum|aturan\s+minum|dosis|promo|ongkir|kurir|ekspedisi|cod|sukumba|halal|haram|mui|info\s+produk|isi|netto|berat|gram|gr|sachet|bungkus|box|testimoni|testimonial|review|ulasan|bukti|hasil|pengiriman|kirim|sampai|estimasi)\b/i.test(lower)) {
+  if (/\b(jualan|produk|jual\s+apa|menjual|harga|harganya|khasiat|manfaat|kandungan|cara\s+minum|aturan\s+minum|dosis|promo|ongkir|kurir|ekspedisi|cod|sukumba|halal|haram|mui|info\s+produk|isi|netto|berat|gram|gr|sachet|bungkus|box|testi|testimoni|testimonial|review|ulasan|bukti|hasil|pengiriman|kirim|sampai|estimasi)\b/i.test(lower)) {
     if (isProductPackagingQuestion(lower)) {
       return productPackagingReply();
     }
@@ -1113,7 +1313,7 @@ function localSafeFallbackReply(text, history = [], profile = {}) {
     if (isShippingEstimateQuestion(lower)) {
       return 'Untuk pengiriman biasanya memakai JNE REG ya Kak, estimasi sampai sekitar 4-7 hari kerja setelah paket diproses.\n\nKalau Kakak ingin cek ongkir, boleh kirim kecamatan, kabupaten/kota, dan provinsinya dulu ya.';
     }
-    if (isTestimonialRequest(lower)) {
+    if (isTestimonialRequest(lower) || isTestimonialFollowup(lower, history)) {
       return 'Boleh Kak, saya kirimkan testimoni customer SUKUMBA ya.';
     }
     if (/\b(cara\s+minum|aturan\s+minum|dosis|minum|konsumsi)\b/i.test(lower)) {
@@ -1516,12 +1716,12 @@ function isSukumbaProduct(p) {
   return /\b(sukumba|susu|kuda|sumbawa|herbal|stamina|vitalitas)\b/i.test(haystack);
 }
 
-function findRelevantContext(text, products, faqs, testimonials) {
+function findRelevantContext(text, products, faqs, testimonials, history = []) {
   const lowerText = text.toLowerCase();
   products = (products || []).filter(isSukumbaProduct);
   faqs = faqs || [];
   testimonials = testimonials || [];
-  if (isTestimonialRequest(lowerText)) {
+  if (isTestimonialRequest(lowerText) || isTestimonialFollowup(lowerText, history)) {
     return { products: [], faqs: [], testimonials: testimonials.slice(0, 12) };
   }
   const words = lowerText.split(/\s+/).filter(w => w.length > 3);
@@ -1572,10 +1772,17 @@ async function connectToWhatsApp() {
     return;
   }
   
-  currentSock.ev.on('creds.update', async (...args) => {
+currentSock.ev.on('creds.update', async (...args) => {
     if (generation !== connectionGeneration || sock !== currentSock) return;
     try {
       await saveCredsFn(...args);
+      const hasPairedAccount = !!(currentSock.user || state?.creds?.me || (args[0] && args[0].me));
+      if (waStatus === 'waiting_scan' && hasPairedAccount) {
+        lastQR = null;
+        isReady = false;
+        setWAStatus('scanned', 'qr_scanned_waiting_connection');
+        log('INFO', 'QR scanned, waiting for WhatsApp connection to become ready');
+      }
     } catch(e) {
       log('ERROR', `Failed to save WA credentials: ${e.message}`);
     }
@@ -1614,6 +1821,11 @@ async function connectToWhatsApp() {
       dbHistory = await getHistory(senderNumber);
       profile = await getProfile(senderNumber);
     } catch(e) {}
+
+    if (profile && profile.human_handoff_active) {
+      log('INFO', `Human handoff active for ${senderNumber}; AI auto-reply skipped`);
+      return;
+    }
 
     if (hasMedia && (isPaymentProofMessage(text) || profile.pending_slot === 'payment_proof' || assistantAskedPaymentProof(dbHistory) || hasRecentPaymentContext(profile, dbHistory))) {
       try {
@@ -1678,6 +1890,20 @@ async function connectToWhatsApp() {
         await sendTextAndRemember(sock, from, senderNumber, quote);
         return;
       }
+    }
+
+    if (isTechnicalIssue(text)) {
+      await sendTextAndRemember(sock, from, senderNumber, technicalIssueReply());
+      await saveProfile(senderNumber, {
+        active_flow: 'human_handoff',
+        active_stage: 'technical_issue_review',
+        last_question_id: 'technical_issue_detail',
+        pending_slot: 'admin_review',
+        last_offer_type: 'none',
+        state_confidence: 'high',
+      }, 'Customer melaporkan kendala teknis pada WhatsApp/chat/sistem.');
+      await notifAdminEskalasi(from, userName, text);
+      return;
     }
 
     if (isOperationalComplaint(text)) {
@@ -1775,7 +2001,8 @@ async function connectToWhatsApp() {
         products = pRes.data; faqs = fRes.data; testimonials = tRes.data;
       } catch(e) {}
       
-      const { products: rp, faqs: rf, testimonials: rt } = findRelevantContext(text, products, faqs, testimonials);
+      const wantsTestimonialMedia = isTestimonialRequest(text) || isTestimonialFollowup(text, dbHistory);
+      const { products: rp, faqs: rf, testimonials: rt } = findRelevantContext(text, products, faqs, testimonials, dbHistory);
       
       let knowledgeContext = '';
       if (rp.length) { knowledgeContext += 'PRODUK RELEVAN:\n'; rp.forEach(p => { knowledgeContext += `- [ID:${p.id}] ${p.name}: ${p.price}\n  Fitur: ${(p.features||[]).join(', ')}\n`; }); }
@@ -1820,17 +2047,26 @@ async function connectToWhatsApp() {
       let match;
       while ((match = photoRegex.exec(aiReply)) !== null) photoSignals.push({type:match[1],id:parseInt(match[2])});
       aiReply = aiReply.replace(/\[PHOTO:(product|faq|testimonial):\d+\]/gi,'').trim();
-      if (isTestimonialRequest(text) && photoSignals.length === 0) {
+      if (wantsTestimonialMedia && photoSignals.length === 0) {
         const testimonialLimit = Math.max(1, Math.min(parseInt(process.env.TESTIMONIAL_MEDIA_LIMIT || '3', 10) || 3, 10));
-        photoCatalog
-          .filter(item => item.type === 'testimonial')
+        const testimonialItems = photoCatalog.filter(item => item.type === 'testimonial');
+        const testimonialTurnCount = dbHistory.filter(item => {
+          if (!item || item.role !== 'user') return false;
+          const content = item.content || '';
+          return isTestimonialRequest(content) || /\b(lain|lainnya|yang\s+lain|testi\s+lain|testimoni\s+lain|review\s+lain|bukti\s+lain)\b/i.test(content);
+        }).length;
+        const offset = testimonialItems.length
+          ? ((Math.max(0, testimonialTurnCount - 1) * testimonialLimit) % testimonialItems.length)
+          : 0;
+        testimonialItems
+          .slice(offset)
+          .concat(testimonialItems.slice(0, offset))
           .slice(0, testimonialLimit)
           .forEach(item => photoSignals.push({ type: item.type, id: item.id }));
-        log('INFO', `Testimonial request detected. Media queued: ${photoSignals.length}/${photoCatalog.length}`);
+        log('INFO', `Testimonial request detected. Media queued: ${photoSignals.length}/${testimonialItems.length}, offset=${offset}`);
       }
       
-      await saveHistory(senderNumber, 'assistant', aiReply);
-      await sock.sendMessage(from, { text: aiReply });
+      await sendCustomerTextAndRemember(sock, from, senderNumber, aiReply);
 
       if (aiMeta.start_order) {
         if (!/nama\s*:|alamat\s+jalan\s*:|pembayaran\s*:\s*cod\/trf/i.test(aiReply)) {
@@ -1871,8 +2107,7 @@ async function connectToWhatsApp() {
     } catch(err) {
       log('ERROR', `Error processing message: ${err.message}`);
       const fallbackReply = localSafeFallbackReply(text, dbHistory || [], profile || {});
-      await saveHistory(senderNumber, 'assistant', fallbackReply);
-      await sock.sendMessage(from, { text: fallbackReply });
+      await sendCustomerTextAndRemember(sock, from, senderNumber, fallbackReply);
     }
   });
 
@@ -1891,6 +2126,10 @@ async function connectToWhatsApp() {
         lastQRLogAt = now;
         log('INFO', 'QR ready in admin panel');
       }
+    }
+    if (connection === 'connecting' && waStatus !== 'waiting_scan' && waStatus !== 'scanned') {
+      isReady = false;
+      setWAStatus('connecting', 'socket_connecting');
     }
     if (connection==='open') { 
       log('INFO', 'WhatsApp Connected!'); 
@@ -1936,7 +2175,11 @@ app.post('/send-message', requireInternalAuth, async (req,res) => {
   const jid = outboundCustomerJid(to);
   if (!jid) return res.status(400).json({success:false,error:'Invalid recipient'});
   try {
-    await sock.sendMessage(jid, { text: message });
+    const settings = await getSafetySettings();
+    const safeText = boolSetting(settings.wa_safety_guard_enabled, true)
+      ? sanitizeOutboundText(message, settings)
+      : String(message || '').trim();
+    await sock.sendMessage(jid, { text: safeText });
     return res.json({success:true,to:jid});
   } catch(e) {
     log('ERROR', `Send message failed to ${jid}: ${e.message || e}`);

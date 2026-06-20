@@ -31,6 +31,7 @@ function loadSectionData(sectionName) {
   if (sectionName === "finance" && typeof loadPaymentProofs === "function") loadPaymentProofs();
   if (sectionName === "shipping" && typeof loadShippingRates === "function") loadShippingRates();
   if (sectionName === "logs" && typeof loadAnalytics === "function") loadAnalytics();
+  if (sectionName === "system-ai" && typeof loadSystemAiMemory === "function") loadSystemAiMemory();
   if (sectionName === "settings") {
     if (typeof loadSettings === "function") loadSettings();
     if (typeof loadTgUsers === "function") loadTgUsers();

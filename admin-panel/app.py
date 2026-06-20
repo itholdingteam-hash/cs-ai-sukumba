@@ -9,7 +9,7 @@ Deploy:
     3. python3 app.py
 """
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from datetime import datetime
@@ -26,6 +26,7 @@ from admin_core.config import load_config
 from admin_core.db import configure_database, get_db, init_db
 from admin_core.helpers import (
     allowed_file,
+    normalize_wa_number,
 )
 from routes.catalog import catalog_bp
 from routes.closings import closings_bp
@@ -73,6 +74,15 @@ ALLOWED_SETTING_KEYS = {
     'prompt_product',
     'prompt_order',
     'prompt_escalation',
+    'wa_safety_guard_enabled',
+    'wa_safety_auto_reply_paused',
+    'wa_safety_manual_only',
+    'wa_safety_min_delay_seconds',
+    'wa_safety_max_delay_seconds',
+    'wa_safety_daily_auto_limit',
+    'wa_safety_append_optout',
+    'wa_safety_block_new_outbound',
+    'wa_safety_risky_words',
 }
 SECRET_SETTING_KEYS = {
     'llm_api_key',
@@ -166,6 +176,40 @@ def logout():
 @login_required
 def dashboard():
     return render_template('dashboard.html', company_name=get_setting('company_name') or 'Admin Panel')
+
+
+@app.route('/wa-trust')
+def wa_trust_page():
+    company_name = get_setting('company_name') or 'Sukumba'
+    contact = normalize_wa_number(get_setting('company_contact') or '')
+    display_contact = '+' + contact if contact else ''
+    wa_link = f'https://wa.me/{contact}' if contact else '#'
+    return render_template(
+        'wa_trust.html',
+        company_name=company_name,
+        display_contact=display_contact,
+        wa_link=wa_link,
+    )
+
+
+@app.route('/sukumba-contact.vcf')
+def sukumba_contact_vcf():
+    company_name = get_setting('company_name') or 'Sukumba'
+    contact = normalize_wa_number(get_setting('company_contact') or '')
+    vcf = (
+        'BEGIN:VCARD\r\n'
+        'VERSION:3.0\r\n'
+        f'FN:{company_name} Official\r\n'
+        f'ORG:{company_name}\r\n'
+        f'TEL;TYPE=CELL,VOICE:+{contact}\r\n'
+        'NOTE:Kontak resmi customer service Sukumba.\r\n'
+        'END:VCARD\r\n'
+    )
+    return Response(
+        vcf,
+        mimetype='text/vcard',
+        headers={'Content-Disposition': 'attachment; filename=sukumba-official.vcf'},
+    )
 
 
 # ------------------------------------------------------------------

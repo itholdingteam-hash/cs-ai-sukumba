@@ -110,6 +110,54 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             },
         )
 
+    explicit_package_order = (
+        deps.is_package_choice_request(lower)
+        and (
+            re.search(r'\b(order|pesan|pesen|beli|ambil|pilih|cod|tf|transfer|checkout|co)\b', lower)
+            or re.search(r'\bmau\b.{0,24}\b(1|2|satu|dua)\s*(box|bok|paket)?\b', lower)
+        )
+    )
+    if explicit_package_order:
+        payment = 'COD' if re.search(r'\bcod\b|bayar\s+di\s+tempat', lower) else ('TRF' if re.search(r'\b(tf|transfer)\b', lower) else '')
+        return (
+            deps.package_choice_reply(raw_text, default_payment=payment.lower()),
+            'order',
+            'syifa_package_choice_template',
+            {
+                'start_order': True,
+                'order_prefill': deps.order_prefill_for_choice(raw_text, payment),
+                'active_flow': 'order',
+                'active_stage': 'awaiting_order_form',
+                'last_question_id': 'ask_order_form',
+                'pending_slot': 'order_form',
+                'last_offer_type': 'order_form',
+                'state_confidence': 'high',
+            }
+        )
+
+    if state.get('pending_slot') == 'package_choice' and deps.is_package_choice_request(lower):
+        context_text = ' '.join(str(item.get('content') or '') for item in history or [] if isinstance(item, dict)).lower()
+        payment = ''
+        if re.search(r'\bcod\b|bayar\s+di\s+tempat', lower) or ('cod' in context_text and not re.search(r'\b(tf|transfer)\b', lower)):
+            payment = 'COD'
+        elif re.search(r'\b(tf|transfer)\b', lower):
+            payment = 'TRF'
+        return (
+            deps.package_choice_reply(raw_text, default_payment=payment.lower()),
+            'order',
+            'syifa_pending_package_choice',
+            {
+                'start_order': True,
+                'order_prefill': deps.order_prefill_for_choice(raw_text, payment),
+                'active_flow': 'order',
+                'active_stage': 'awaiting_order_form',
+                'last_question_id': 'ask_order_form',
+                'pending_slot': 'order_form',
+                'last_offer_type': 'order_form',
+                'state_confidence': 'high',
+            }
+        )
+
     if re.search(r'\b(tf|transfer|rekening(?:nya)?|no\s*rek|nomor\s*rekening|bca|bayar\s+transfer|total\s+tf)\b', lower):
         return (
             deps.template_transfer_info(),
@@ -160,7 +208,29 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             }
         )
 
-    if re.search(r'\b(cod|bayar\s+di\s+tempat)\b', lower):
+    cod_signal = re.search(r'\b(cod|bayar\s+di\s+tempat)\b', lower)
+    cod_question_only = (
+        cod_signal
+        and re.search(r'\b(bisa|boleh|tersedia|support|ada)\b', lower)
+        and not deps.is_package_choice_request(lower)
+        and not re.search(r'\b(mau|order|pesan|pesen|beli|ambil|checkout|co|lanjut)\b', lower)
+    )
+    if cod_question_only:
+        return (
+            "Bisa COD Kak. Untuk Sukumba ada paket 1 box Rp 99.000 dan 2 box Rp 159.000, ongkir menyesuaikan alamat. Mau ambil yang 1 box atau 2 box?",
+            'payment_cod',
+            'syifa_cod_question_template',
+            {
+                'active_flow': 'order',
+                'active_stage': 'package_choice',
+                'last_question_id': 'ask_package_choice',
+                'pending_slot': 'package_choice',
+                'last_offer_type': 'order',
+                'state_confidence': 'high',
+            }
+        )
+
+    if cod_signal:
         return (
             deps.template_order_form("Bisa COD Kak. Boleh lengkapi form order berikut ya, pilih paket 1 box atau 2 box di bagian keluhan/catatan."),
             'payment_cod',
@@ -306,7 +376,12 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             deps.product_context_updates('high')
         )
 
-    if re.search(r'\b(testimoni|bukti|review|ulasan|hasil)\b', lower):
+    history_text = ' '.join(str(item.get('content') or '') for item in history or [] if isinstance(item, dict)).lower()
+    testimonial_followup = (
+        re.search(r'\b(lain|lainnya|yang\s+lain|testi\s+lain|testimoni\s+lain)\b', lower)
+        and re.search(r'\b(testi|testimoni|testimonial|review|ulasan|bukti|hasil)\b', history_text)
+    )
+    if re.search(r'\b(testi|testimoni|testimonial|bukti|review|ulasan|hasil)\b', lower) or testimonial_followup:
         return (
             deps.template_testimoni_offer(),
             'product_info',

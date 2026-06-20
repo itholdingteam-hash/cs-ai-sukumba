@@ -1,66 +1,196 @@
       <!-- SETTINGS -->
       <div class="section" id="section-settings">
-        <div class="settings-section">
-          <div class="settings-title">&#x1F3E2; Informasi Perusahaan</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Nama Perusahaan</label><input class="input" id="s-name"></div>
-            <div class="form-row"><label class="label">Kontak WA</label><input class="input" id="s-contact"></div>
-            <div class="form-row"><label class="label">Lokasi</label><input class="input" id="s-location"></div>
-            <div class="form-row"><label class="label">Jam Operasional</label><input class="input" id="s-hours"></div>
+        <div class="settings-workspace">
+          <div class="settings-tabs" aria-label="Tab Pengaturan">
+            <button class="settings-tab-card active" type="button" onclick="showSettingsTab('company', this)">
+              <span class="settings-tab-index">01</span>
+              <span>Perusahaan</span>
+            </button>
+            <button class="settings-tab-card" type="button" onclick="showSettingsTab('ai-engine', this)">
+              <span class="settings-tab-index">02</span>
+              <span>AI Engine</span>
+            </button>
+            <button class="settings-tab-card" type="button" onclick="showSettingsTab('wa-safety', this)">
+              <span class="settings-tab-index">03</span>
+              <span>WA Safety Guard</span>
+            </button>
+            <button class="settings-tab-card" type="button" onclick="showSettingsTab('memory', this)">
+              <span class="settings-tab-index">04</span>
+              <span>Testing Memory</span>
+            </button>
+            <button class="settings-tab-card" type="button" onclick="showSettingsTab('telegram', this)">
+              <span class="settings-tab-index">05</span>
+              <span>Telegram</span>
+            </button>
           </div>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x1F916; AI Engine</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Provider</label>
-              <select class="select" id="s-provider">
-                <option value="openrouter">OpenRouter</option>
-                <option value="groq">Groq</option>
-                <option value="openai">OpenAI Compatible</option>
-                <option value="local">Local LLM</option>
-              </select>
-            </div>
-            <div class="form-row"><label class="label">API URL</label><input class="input" id="s-api-url" placeholder="https://openrouter.ai/api/v1/chat/completions"></div>
-            <div class="form-row"><label class="label">Model AI</label>
-              <input class="input" id="s-model" list="model-options" placeholder="qwen/qwen3-32b:free">
-              <datalist id="model-options">
-                <option value="qwen/qwen3-32b:free">
-                <option value="meta-llama/llama-3.3-70b-instruct:free">
-                <option value="deepseek/deepseek-v4-flash:free">
-                <option value="openrouter/free">
-                <option value="openai/gpt-5.4-mini">
-                <option value="anthropic/claude-haiku-4.5">
-                <option value="llama-3.3-70b-versatile">
-                <option value="llama-3.1-8b-instant">
-              </datalist>
-            </div>
-            <div class="form-row"><label class="label">API Key</label><input class="input" id="s-apikey" type="password" placeholder="OpenRouter/Groq/OpenAI key"></div>
-            <div class="form-row"><label class="label">Temperature (0&ndash;1)</label><input class="input" id="s-temp" type="number" step="0.1" min="0" max="1"></div>
-            <div class="form-row"><label class="label">Max Tokens</label><input class="input" id="s-tokens" type="number" min="100" max="2000"></div>
-          </div>
-          <button class="btn btn-primary" onclick="saveSettings()">&#x1F4BE; Simpan Pengaturan</button>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x2708;&#xFE0F; Telegram Bot</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Bot Token</label><input class="input" id="s-tg-token" type="password" placeholder="123456:AAxxxx"></div>
-            <div class="form-row" style="display:flex;align-items:flex-end"><button class="btn btn-ghost" onclick="setTelegramWebhook()" style="width:100%">&#x1F517; Atur Webhook</button></div>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="saveTgToken()">&#x1F4BE; Simpan Token</button>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title">&#x1F9EA; Testing Memory</div>
-          <div class="grid-2">
-            <div class="form-row"><label class="label">Nomor WA Customer</label><input class="input" id="reset-memory-number" placeholder="62812xxxx"></div>
-            <div class="form-row" style="display:flex;align-items:flex-end;gap:8px">
-              <button class="btn btn-ghost" onclick="checkCustomerMemory()" style="flex:1">Cek Memory</button>
-              <button class="btn btn-danger" onclick="resetCustomerMemory()" style="flex:1">Reset</button>
+
+          <div class="settings-panel active" data-settings-tab="company">
+            <section class="settings-readme">
+              <div>
+                <div class="settings-readme-kicker">README</div>
+                <h3>Informasi Perusahaan</h3>
+                <p>Data dasar brand yang dipakai AI untuk menjawab customer dengan identitas, lokasi, dan jam operasional yang konsisten.</p>
+              </div>
+              <div class="settings-readme-grid">
+                <div><strong>Tujuan</strong><span>Menyimpan identitas bisnis utama agar AI dan dashboard memakai informasi yang sama.</span></div>
+                <div><strong>Nanti berisi</strong><span>Nama brand, kontak WA, lokasi bisnis, jam operasional, dan link aman customer.</span></div>
+                <div><strong>Manfaat</strong><span>Customer mendapat informasi resmi tanpa jawaban yang berubah-ubah antar percakapan.</span></div>
+              </div>
+            </section>
+            <div class="settings-section settings-card">
+              <div class="settings-title">Informasi Perusahaan</div>
+              <div class="grid-2">
+                <div class="form-row"><label class="label">Nama Perusahaan</label><input class="input" id="s-name"></div>
+                <div class="form-row"><label class="label">Kontak WA</label><input class="input" id="s-contact"></div>
+                <div class="form-row"><label class="label">Lokasi</label><input class="input" id="s-location"></div>
+                <div class="form-row"><label class="label">Jam Operasional</label><input class="input" id="s-hours"></div>
+              </div>
+              <div class="settings-action-row">
+                <button class="btn btn-primary" type="button" onclick="saveSettings()">Simpan Pengaturan</button>
+              </div>
             </div>
           </div>
-          <div id="memory-reset-result" style="font-size:12px;color:var(--text2);line-height:1.5"></div>
-        </div>
-        <div class="settings-section">
-          <div class="settings-title"><span>&#x1F465; Telegram Whitelist</span><button class="btn btn-primary btn-sm" onclick="openAddTgUser()">&#x2795; Tambah</button></div>
-          <div id="tg-users-list"></div>
+
+          <div class="settings-panel" data-settings-tab="ai-engine">
+            <section class="settings-readme">
+              <div>
+                <div class="settings-readme-kicker">README</div>
+                <h3>AI Engine</h3>
+                <p>Konfigurasi provider, endpoint, model, dan parameter jawaban AI yang menentukan cara CS otomatis merespons customer.</p>
+              </div>
+              <div class="settings-readme-grid">
+                <div><strong>Tujuan</strong><span>Mengontrol mesin AI tanpa perlu mengubah kode atau file environment langsung.</span></div>
+                <div><strong>Nanti berisi</strong><span>Provider, API URL, model, API key, temperature, max token, dan tombol test koneksi.</span></div>
+                <div><strong>Manfaat</strong><span>Perubahan model atau gaya respons bisa dilakukan cepat dari dashboard admin.</span></div>
+              </div>
+            </section>
+            <div class="settings-section settings-card">
+              <div class="settings-title">AI Engine</div>
+              <div class="grid-2">
+                <div class="form-row"><label class="label">Provider</label>
+                  <select class="select" id="s-provider">
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="groq">Groq</option>
+                    <option value="openai">OpenAI Compatible</option>
+                    <option value="local">Local LLM</option>
+                  </select>
+                </div>
+                <div class="form-row"><label class="label">API URL</label><input class="input" id="s-api-url" placeholder="https://openrouter.ai/api/v1/chat/completions"></div>
+                <div class="form-row"><label class="label">Model AI</label>
+                  <input class="input" id="s-model" list="model-options" placeholder="qwen/qwen3-32b:free">
+                  <datalist id="model-options">
+                    <option value="qwen/qwen3-32b:free">
+                    <option value="meta-llama/llama-3.3-70b-instruct:free">
+                    <option value="deepseek/deepseek-v4-flash:free">
+                    <option value="openrouter/free">
+                    <option value="openai/gpt-5.4-mini">
+                    <option value="anthropic/claude-haiku-4.5">
+                    <option value="llama-3.3-70b-versatile">
+                    <option value="llama-3.1-8b-instant">
+                  </datalist>
+                </div>
+                <div class="form-row"><label class="label">API Key</label><input class="input" id="s-apikey" type="password" placeholder="OpenRouter/Groq/OpenAI key"></div>
+                <div class="form-row"><label class="label">Temperature (0-1)</label><input class="input" id="s-temp" type="number" step="0.1" min="0" max="1"></div>
+                <div class="form-row"><label class="label">Max Tokens</label><input class="input" id="s-tokens" type="number" min="100" max="2000"></div>
+              </div>
+              <div class="settings-action-row">
+                <button class="btn btn-primary" type="button" onclick="saveSettings()">Simpan Pengaturan</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-panel" data-settings-tab="wa-safety">
+            <section class="settings-readme">
+              <div>
+                <div class="settings-readme-kicker">README</div>
+                <h3>WA Safety Guard</h3>
+                <p>Rem pengaman untuk auto-reply WhatsApp agar AI tidak membalas terlalu cepat, terlalu sering, atau pada kasus yang berisiko.</p>
+              </div>
+              <div class="settings-readme-grid">
+                <div><strong>Tujuan</strong><span>Menjaga operasional WhatsApp tetap aman saat ada komplain, risiko klaim, atau maintenance.</span></div>
+                <div><strong>Nanti berisi</strong><span>Mode aman, pause auto-reply, manual only, delay, limit harian, dan kata/frasa berisiko.</span></div>
+                <div><strong>Manfaat</strong><span>AI punya pagar pembatas sehingga percakapan sensitif bisa ditahan atau diambil alih manusia.</span></div>
+              </div>
+            </section>
+            <div class="settings-section settings-card">
+              <div class="settings-title">WA Safety Guard</div>
+              <div class="system-ai-info settings-info">
+                <div class="system-ai-label">Link aman untuk customer</div>
+                <div class="system-ai-info-text">Gunakan <strong>/wa-trust</strong> untuk iklan, bio, atau landing page agar customer menyimpan kontak resmi sebelum lanjut chat.</div>
+              </div>
+              <div class="grid-2">
+                <label class="check-row"><input type="checkbox" id="s-wa-guard-enabled"> Aktifkan mode aman WA</label>
+                <label class="check-row"><input type="checkbox" id="s-wa-auto-paused"> Pause auto-reply sementara</label>
+                <label class="check-row"><input type="checkbox" id="s-wa-manual-only"> Hanya balasan manual CS</label>
+                <label class="check-row"><input type="checkbox" id="s-wa-optout"> Tambahkan instruksi STOP</label>
+                <div class="form-row"><label class="label">Delay minimum auto-reply (detik)</label><input class="input" id="s-wa-min-delay" type="number" min="0" max="600"></div>
+                <div class="form-row"><label class="label">Delay maksimum auto-reply (detik)</label><input class="input" id="s-wa-max-delay" type="number" min="0" max="900"></div>
+                <div class="form-row"><label class="label">Limit auto-reply per hari</label><input class="input" id="s-wa-daily-limit" type="number" min="1" max="1000"></div>
+                <label class="check-row"><input type="checkbox" id="s-wa-block-new"> Blokir pesan keluar ke chat baru</label>
+              </div>
+              <div class="form-row">
+                <label class="label">Kata/frasa berisiko</label>
+                <textarea class="textarea" id="s-wa-risky-words" rows="3" placeholder="Pisahkan dengan koma"></textarea>
+              </div>
+              <div class="settings-action-row">
+                <button class="btn btn-primary" type="button" onclick="saveWaSafetySettings()">Simpan Safety Guard</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-panel" data-settings-tab="memory">
+            <section class="settings-readme">
+              <div>
+                <div class="settings-readme-kicker">README</div>
+                <h3>Testing Memory</h3>
+                <p>Alat cepat untuk memeriksa dan mereset memory customer berdasarkan nomor WhatsApp saat CS perlu debugging konteks AI.</p>
+              </div>
+              <div class="settings-readme-grid">
+                <div><strong>Tujuan</strong><span>Mengecek apakah AI masih menyimpan profil, summary, dan history customer tertentu.</span></div>
+                <div><strong>Nanti berisi</strong><span>Cek memory, reset history, reset profile, dan audit singkat konteks customer.</span></div>
+                <div><strong>Manfaat</strong><span>Admin bisa membersihkan konteks yang salah tanpa menyentuh database langsung.</span></div>
+              </div>
+            </section>
+            <div class="settings-section settings-card">
+              <div class="settings-title">Testing Memory</div>
+              <div class="grid-2">
+                <div class="form-row"><label class="label">Nomor WA Customer</label><input class="input" id="reset-memory-number" placeholder="62812xxxx"></div>
+                <div class="form-row settings-inline-actions">
+                  <button class="btn btn-ghost" type="button" onclick="checkCustomerMemory()">Cek Memory</button>
+                  <button class="btn btn-danger" type="button" onclick="resetCustomerMemory()">Reset</button>
+                </div>
+              </div>
+              <div id="memory-reset-result" class="settings-result"></div>
+            </div>
+          </div>
+
+          <div class="settings-panel" data-settings-tab="telegram">
+            <section class="settings-readme">
+              <div>
+                <div class="settings-readme-kicker">README</div>
+                <h3>Telegram Bot</h3>
+                <p>Integrasi Telegram untuk notifikasi internal, webhook, dan whitelist admin/CS yang boleh menerima informasi sistem.</p>
+              </div>
+              <div class="settings-readme-grid">
+                <div><strong>Tujuan</strong><span>Mengirim notifikasi penting seperti order, pembayaran, handoff, dan error sistem.</span></div>
+                <div><strong>Nanti berisi</strong><span>Bot token, webhook, daftar whitelist, role admin, dan tombol test notifikasi.</span></div>
+                <div><strong>Manfaat</strong><span>Tim bisa menerima alert operasional tanpa harus terus membuka dashboard.</span></div>
+              </div>
+            </section>
+            <div class="settings-section settings-card">
+              <div class="settings-title">Telegram Bot</div>
+              <div class="grid-2">
+                <div class="form-row"><label class="label">Bot Token</label><input class="input" id="s-tg-token" type="password" placeholder="123456:AAxxxx"></div>
+                <div class="form-row settings-inline-actions">
+                  <button class="btn btn-ghost" type="button" onclick="setTelegramWebhook()">Atur Webhook</button>
+                  <button class="btn btn-ghost" type="button" onclick="saveTgToken()">Simpan Token</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section settings-card">
+              <div class="settings-title"><span>Telegram Whitelist</span><button class="btn btn-primary btn-sm" type="button" onclick="openAddTgUser()">Tambah</button></div>
+              <div id="tg-users-list"></div>
+            </div>
+          </div>
         </div>
       </div>

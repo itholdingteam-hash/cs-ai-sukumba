@@ -73,6 +73,16 @@
               </div>
             </div>
           </section>
+
+          <section id="wa-pairing-section" class="wa-panel wa-pairing-panel" hidden>
+            <div class="wa-pairing-state">
+              <div class="wa-pairing-spinner" aria-hidden="true"></div>
+              <div>
+                <div class="wa-panel-title">QR berhasil dipindai</div>
+                <div class="wa-panel-sub">Mohon tunggu, WhatsApp sedang menyiapkan koneksi. Status akan berubah otomatis saat CS AI sudah siap menerima pesan.</div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -95,6 +105,8 @@
       {% include "sections/shipping.html" %}
 
       {% include "sections/analytics.html" %}
+
+      {% include "sections/system_ai.html" %}
 
       {% include "sections/settings.html" %}
 
@@ -264,5 +276,6 @@
 <script src="{{ url_for('static', filename='js/modules/finance.js') }}?v={{ static_version }}"></script>
 <script src="{{ url_for('static', filename='js/modules/shipping.js') }}?v={{ static_version }}"></script>
 <script src="{{ url_for('static', filename='js/modules/analytics.js') }}?v={{ static_version }}"></script>
+<script src="{{ url_for('static', filename='js/modules/system-ai.js') }}?v={{ static_version }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ static_version }}"></script>
 {% endblock %}

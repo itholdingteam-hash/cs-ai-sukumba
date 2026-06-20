@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ company_name }} Official WhatsApp</title>
+  <style>
+    :root{
+      --bg:#0B1018;
+      --surface:#121A27;
+      --surface2:#192334;
+      --text:#F4F7FB;
+      --text2:#AAB5C5;
+      --teal:#22D3B6;
+      --green:#25D366;
+      --border:rgba(255,255,255,.1);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      padding:22px;
+      background:var(--bg);
+      color:var(--text);
+      font-family:Arial,sans-serif;
+      line-height:1.5;
+    }
+    .wrap{
+      width:min(560px,100%);
+      border:1px solid var(--border);
+      border-radius:22px;
+      background:var(--surface);
+      padding:24px;
+      box-shadow:0 20px 60px rgba(0,0,0,.28);
+    }
+    .badge{
+      display:inline-flex;
+      margin-bottom:14px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(34,211,182,.12);
+      color:var(--teal);
+      font-size:12px;
+      font-weight:700;
+    }
+    h1{font-size:25px;margin-bottom:8px}
+    p{color:var(--text2);font-size:14px;margin-bottom:16px}
+    .contact{
+      padding:14px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:var(--surface2);
+      margin:18px 0;
+    }
+    .number{font-size:20px;font-weight:800;margin-top:3px}
+    .steps{display:grid;gap:10px;margin:18px 0}
+    .step{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      color:var(--text2);
+      font-size:14px;
+    }
+    .step b{
+      flex:0 0 25px;
+      height:25px;
+      display:grid;
+      place-items:center;
+      border-radius:50%;
+      background:rgba(34,211,182,.12);
+      color:var(--teal);
+      font-size:12px;
+    }
+    .actions{display:grid;gap:10px;margin-top:18px}
+    a{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:48px;
+      border-radius:14px;
+      text-decoration:none;
+      font-weight:800;
+    }
+    .save{background:var(--teal);color:#04110F}
+    .chat{background:var(--green);color:#03130A}
+    .note{font-size:12px;color:var(--text2);margin-top:14px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <span class="badge">Kontak Resmi</span>
+    <h1>{{ company_name }} Official WhatsApp</h1>
+    <p>Simpan kontak resmi terlebih dahulu agar WhatsApp lebih mudah mengenali akun ini sebagai kontak customer service yang valid.</p>
+    <div class="contact">
+      <div>Nomor resmi</div>
+      <div class="number">{{ display_contact }}</div>
+    </div>
+    <div class="steps">
+      <div class="step"><b>1</b><span>Tekan tombol <strong>Simpan Kontak</strong>.</span></div>
+      <div class="step"><b>2</b><span>Simpan sebagai <strong>{{ company_name }} Official</strong>.</span></div>
+      <div class="step"><b>3</b><span>Kembali ke halaman ini, lalu tekan <strong>Chat WhatsApp</strong>.</span></div>
+    </div>
+    <div class="actions">
+      <a class="save" href="/sukumba-contact.vcf">Simpan Kontak</a>
+      <a class="chat" href="{{ wa_link }}">Chat WhatsApp</a>
+    </div>
+    <div class="note">Jika WhatsApp masih menampilkan peringatan, pilih lanjut hanya setelah memastikan nomor ini sudah tersimpan sebagai kontak resmi.</div>
+  </main>
+</body>
+</html>

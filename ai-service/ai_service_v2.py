@@ -303,12 +303,22 @@ def is_operational_complaint(text):
             lower,
         )
     )
+    resi_issue = (
+        re.search(
+            r'\b(resi|tracking)\b.{0,60}\b(tidak\s+bergerak|ga\s+bergerak|gak\s+bergerak|nggak\s+bergerak|belum\s+update|tidak\s+update|ga\s+update|gak\s+update|tertahan|lama|nyasar|hilang)\b',
+            lower,
+        )
+        or re.search(
+            r'\b(tidak\s+bergerak|ga\s+bergerak|gak\s+bergerak|nggak\s+bergerak|belum\s+update|tidak\s+update|ga\s+update|gak\s+update|tertahan)\b.{0,60}\b(resi|tracking)\b',
+            lower,
+        )
+    )
     item_issue = re.search(
         r'\b(rusak|pecah|bocor|sobek|penyok|cacat|salah\s+kirim|barang\s+salah|kurang|tidak\s+lengkap|ga\s+lengkap|gak\s+lengkap|expired|kadaluarsa|kedaluwarsa)\b',
         lower,
     ) and re.search(r'\b(paket|barang|produk|pesanan|order|sukumba|box|kemasan)\b', lower)
     refund_issue = re.search(r'\b(refund|retur|return|uang\s+kembali|balikin\s+uang|ganti\s+barang|klaim|garansi)\b', lower)
-    return bool(explicit_complaint or delivery_issue or item_issue or refund_issue)
+    return bool(explicit_complaint or delivery_issue or resi_issue or item_issue or refund_issue)
 
 def operational_complaint_reply(text):
     lower = html.unescape(str(text or '')).lower()
@@ -339,6 +349,30 @@ def operational_complaint_reply(text):
         "CS Syifa teruskan ke admin supaya bisa dibantu cek dan follow up."
     )
 
+def is_technical_issue(text):
+    lower = html.unescape(str(text or '')).lower().strip()
+    if not lower:
+        return False
+    technical_context = re.search(
+        r'\b(wa|whatsapp|chat|pesan|message|nomor|bot|ai|cs\s*ai|sistem|server|gateway|aplikasi|dashboard)\b',
+        lower,
+    )
+    technical_problem = re.search(
+        r'\b(disconnect|disconnected|terputus|putus|logout|keluar|error|eror|gangguan|kendala|trouble|bermasalah|'
+        r'tidak\s+bisa|nggak\s+bisa|gak\s+bisa|ga\s+bisa|tidak\s+masuk|belum\s+masuk|tidak\s+terkirim|gagal\s+kirim|'
+        r'pending|delay|lambat|lemot|loading|offline|down)\b',
+        lower,
+    )
+    return bool(technical_context and technical_problem)
+
+def technical_issue_reply():
+    return (
+        "Mohon maaf ya Kak, sepertinya sedang ada kendala teknis pada sistem chat kami. "
+        "CS Syifa bantu teruskan ke admin untuk dicek.\n\n"
+        "Kalau pesan Kakak belum terbalas atau sempat gagal terkirim, boleh kirim ulang sebentar lagi ya. "
+        "Kalau urgent, tuliskan kebutuhan Kakak di chat ini agar admin bisa follow up manual."
+    )
+
 def local_intent_hint(msg):
     lower = html.unescape(str(msg or '')).lower().strip()
     if not lower:
@@ -347,6 +381,8 @@ def local_intent_hint(msg):
         return 'conversation'
     if any(x in lower for x in ['batal', 'cancel', 'gak jadi', 'ga jadi', 'tidak jadi']):
         return 'cancel'
+    if is_technical_issue(lower):
+        return 'technical_issue'
     if is_operational_complaint(lower):
         return 'complaint'
     if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service']):
@@ -962,6 +998,8 @@ def deterministic_intent(msg, history=None, profile=None):
         return 'conversation', 99
     if any(x in lower for x in ['batal', 'cancel', 'gak jadi', 'ga jadi', 'tidak jadi']):
         return 'cancel', 96
+    if is_technical_issue(lower):
+        return 'technical_issue', 98
     if is_operational_complaint(lower):
         return 'complaint', 97
     if any(x in lower for x in ['admin', 'cs manusia', 'orangnya', 'customer service']):
@@ -991,7 +1029,7 @@ def deterministic_intent(msg, history=None, profile=None):
 def should_write_summary(intent, profile_updates):
     if profile_updates:
         return True
-    return intent in {'male_health', 'order', 'order_status', 'complaint', 'escalation'}
+    return intent in {'male_health', 'order', 'order_status', 'complaint', 'escalation', 'technical_issue'}
 
 def infer_yes_no(lower, positive_terms):
     return consultation_helpers.infer_yes_no(lower, positive_terms)
@@ -1235,6 +1273,8 @@ def clean_panel_prompt(prompt):
     return text.strip()
 
 def deterministic_safe_reply(raw_text, intent='conversation', profile=None, history=None):
+    if intent == 'technical_issue' or is_technical_issue(raw_text):
+        return technical_issue_reply()
     if intent == 'male_health':
         consult_reply = deterministic_male_consult_reply(raw_text, history, profile)
         if consult_reply:
@@ -1678,6 +1718,39 @@ def orchestrator(msg, history, cfg, profile=None, knowledge_context=''):
             },
         )
 
+    if is_technical_issue(msg):
+        return (
+            technical_issue_reply(),
+            'technical_issue',
+            'technical_issue_agent',
+            {
+                'profile_updates': {
+                    'active_flow': 'human_handoff',
+                    'active_stage': 'technical_issue_review',
+                    'last_question_id': 'technical_issue_detail',
+                    'pending_slot': 'admin_review',
+                    'state_confidence': 'high',
+                },
+                'needs_handoff': True,
+            },
+        )
+
+    if is_operational_complaint(msg):
+        return (
+            operational_complaint_reply(msg),
+            'complaint',
+            'operational_complaint_agent',
+            {
+                'profile_updates': {
+                    'active_flow': 'human_handoff',
+                    'active_stage': 'complaint_review',
+                    'last_question_id': 'complaint_detail',
+                    'pending_slot': 'admin_review',
+                    'state_confidence': 'high',
+                }
+            },
+        )
+
     syifa_template = syifa_template_router(msg, history, profile)
     if syifa_template:
         reply, intent, agent, profile_updates = syifa_template
@@ -1750,6 +1823,9 @@ def orchestrator(msg, history, cfg, profile=None, knowledge_context=''):
     elif intent == 'post_order':
         logger.info("post_order_ack_agent")
         return "Siap Kak, terima kasih. Tim kami akan segera menghubungi untuk pesanan Kakak.", intent, 'post_order_ack_agent', {}
+    elif intent == 'technical_issue':
+        logger.info("technical_issue_agent")
+        return technical_issue_reply(), intent, 'technical_issue_agent', {'needs_handoff': True}
     elif intent == 'complaint':
         logger.info("operational_complaint_agent")
         return operational_complaint_reply(msg), intent, 'operational_complaint_agent', {}
@@ -1865,7 +1941,7 @@ def ai_chat():
         memory_summary = existing_summary
         if should_write_summary(intent, profile_updates):
             memory_summary = update_memory_summary(existing_summary, raw_content, reply, profile_updates, intent, agent, cfg)
-        needs_handoff = bool(profile_updates.get('red_flags')) or intent in ['complaint', 'escalation']
+        needs_handoff = bool(profile_updates.get('red_flags')) or intent in ['complaint', 'escalation', 'technical_issue']
         logger.info(f"Reply: {log_preview(reply)}")
         
         meta = {
@@ -1886,7 +1962,12 @@ def ai_chat():
         fallback_reply = deterministic_safe_reply(raw_content, fallback_intent, profile, history)
         return jsonify({
             'choices': [{'message': {'role':'assistant','content': fallback_reply}}],
-            '_meta': {'intent': fallback_intent, 'agent': 'deterministic_fallback', 'llm_error': True}
+            '_meta': {
+                'intent': fallback_intent,
+                'agent': 'deterministic_fallback',
+                'llm_error': True,
+                'needs_handoff': fallback_intent == 'technical_issue',
+            }
         })
 
 @app.route('/detect-intent', methods=['POST'])
