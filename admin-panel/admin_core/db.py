@@ -120,18 +120,6 @@ def init_db():
             created_at TEXT,
             updated_at TEXT)''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS ai_system_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT DEFAULT '',
-            status TEXT DEFAULT 'draft',
-            tags TEXT DEFAULT '',
-            source_user_number TEXT DEFAULT '',
-            reviewer_note TEXT DEFAULT '',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
-
         c.execute('''CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
             public_order_id TEXT DEFAULT '', product_code TEXT DEFAULT '',
@@ -263,7 +251,6 @@ def _create_indexes(cursor):
     for sql in [
         'CREATE INDEX IF NOT EXISTS idx_history_user_time ON conversation_history(user_number, timestamp)',
         'CREATE INDEX IF NOT EXISTS idx_conversation_logs_timestamp ON conversation_logs(timestamp)',
-        'CREATE INDEX IF NOT EXISTS idx_ai_system_items_type_status ON ai_system_items(item_type, status, updated_at)',
         'CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)',
         'CREATE INDEX IF NOT EXISTS idx_orders_user_number ON orders(user_number)',
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_public_order_id ON orders(public_order_id) WHERE public_order_id != ""',

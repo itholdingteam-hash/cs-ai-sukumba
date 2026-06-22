@@ -18,6 +18,6 @@ var pageTitles = {
   finance:  ["Pembayaran","Validasi bukti pembayaran customer"],
   shipping: ["Ongkir","Kelola biaya kirim per wilayah"],
   logs:     ["Analitik","Statistik dan riwayat percakapan"],
-  "system-ai": ["Sistem AI","Memory, learning, skill, review, scoring, handoff, dan training inbox"],
+  "ai-system": ["Otak AI","Memory, learning, skill, review, scoring, handoff, dan human chat"],
   settings: ["Pengaturan","Konfigurasi sistem dan integrasi"]
 };

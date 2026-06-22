@@ -34,7 +34,6 @@ services:
       - ./wa-gateway/.env
     volumes:
       - ./data:/app/data
-      - ./data/auth_info_baileys:/app/auth_info_baileys
     ports:
       - "3000:3000"
     restart: unless-stopped

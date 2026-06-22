@@ -1,0 +1,470 @@
+<div class="section" id="section-ai-system">
+  <div class="ai-system-shell">
+    <div class="ai-system-tabs" role="tablist" aria-label="Sistem AI">
+      <button class="ai-system-tab active" type="button" data-ai-system-tab="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="memory-customer" role="tab" aria-selected="false">Memory Per Customer</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="learning-bank" role="tab" aria-selected="false">Learning Bank</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="skill-system" role="tab" aria-selected="false">Skill System</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="review-approval" role="tab" aria-selected="false">Review &amp; Approval</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="conversation-scoring" role="tab" aria-selected="false">Conversation Scoring</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="human-handoff" role="tab" aria-selected="false">Human Handoff</button>
+      <button class="ai-system-tab" type="button" data-ai-system-tab="human-chat" role="tab" aria-selected="false">Human Chat</button>
+    </div>
+
+    <div class="ai-system-panel active" id="ai-system-overview" role="tabpanel">
+      <div class="ai-overview-shell">
+        <div class="ai-overview-toolbar">
+          <div>
+            <div class="ai-system-kicker">Overview</div>
+            <h3>Sistem AI Command Center</h3>
+            <p>Ringkasan gabungan dari memory, learning, skill, review, scoring, handoff, dan human chat.</p>
+          </div>
+          <button class="btn btn-primary" onclick="loadAiSystemOverview()">Refresh</button>
+        </div>
+
+        <div class="ai-overview-grid">
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('memory-customer')"><span>Memory</span><strong id="overview-memory-count">0</strong><small>customer tersimpan</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('learning-bank')"><span>Learning</span><strong id="overview-learning-pending">0</strong><small>bahan draft/pending</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('skill-system')"><span>Skill</span><strong id="overview-skill-active">0</strong><small>skill aktif</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('review-approval')"><span>Review</span><strong id="overview-review-pending">0</strong><small>menunggu approval</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('conversation-scoring')"><span>Scoring</span><strong id="overview-scoring-high">0</strong><small>high risk</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('human-handoff')"><span>Handoff</span><strong id="overview-handoff-open">0</strong><small>ticket open</small></button>
+          <button class="ai-overview-card" type="button" onclick="showAiSystemTab('human-chat')"><span>Human Chat</span><strong id="overview-human-chat-active">0</strong><small>chat diambil CS</small></button>
+        </div>
+
+        <div class="ai-overview-workspace">
+          <div class="ai-overview-panel">
+            <div class="memory-card-head"><strong>Prioritas Hari Ini</strong><button class="btn btn-ghost btn-xs" onclick="loadAiSystemOverview()">Muat Ulang</button></div>
+            <div id="overview-priority-list" class="ai-overview-list"><div class="memory-empty">Memuat prioritas...</div></div>
+          </div>
+          <div class="ai-overview-panel">
+            <div class="memory-card-head"><strong>Kesehatan Sistem AI</strong></div>
+            <div class="ai-overview-health">
+              <div><span>Review Queue</span><strong id="overview-health-review">-</strong></div>
+              <div><span>Risk Chat</span><strong id="overview-health-risk">-</strong></div>
+              <div><span>CS Load</span><strong id="overview-health-cs">-</strong></div>
+              <div><span>Knowledge</span><strong id="overview-health-knowledge">-</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-system-panel" id="ai-system-memory-customer" role="tabpanel">
+      <div class="memory-toolbar">
+        <div>
+          <div class="ai-system-kicker">Memory Per Customer</div>
+          <h3>Customer Memory Center</h3>
+          <p>Kelola ingatan AI per nomor WhatsApp: summary, profil customer, konteks keluhan, stage follow up, dan riwayat chat terakhir.</p>
+        </div>
+        <div class="memory-search">
+          <input class="input" id="memory-search-input" placeholder="Cari nomor WA / nama / keluhan">
+          <button class="btn btn-primary" onclick="loadMemoryCustomers()">Cari</button>
+        </div>
+      </div>
+
+      <div class="memory-stats">
+        <div><strong id="memory-total-count">0</strong><span>Customer memory</span></div>
+        <div><strong id="memory-selected-number">-</strong><span>Nomor terpilih</span></div>
+        <div><strong id="memory-history-count">0</strong><span>History chat</span></div>
+      </div>
+
+      <div class="memory-layout">
+        <div class="memory-list-card">
+          <div class="memory-card-head">
+            <strong>Daftar Customer</strong>
+            <button class="btn btn-ghost btn-xs" onclick="loadMemoryCustomers()">Refresh</button>
+          </div>
+          <div id="memory-customer-list" class="memory-customer-list">
+            <div class="memory-empty">Memuat data memory...</div>
+          </div>
+        </div>
+
+        <div class="memory-detail-card">
+          <div class="memory-card-head">
+            <strong>Detail Memory</strong>
+            <button class="btn btn-danger btn-xs" onclick="resetSelectedCustomerMemory()">Reset Memory</button>
+          </div>
+
+          <div class="memory-detail-body">
+            <div class="memory-editor-pane">
+              <div class="memory-form-grid">
+                <div class="form-row"><label class="label">Nomor WA</label><input class="input" id="memory-user-number" placeholder="628xxxxxxxxxx"></div>
+                <div class="form-row"><label class="label">Nama</label><input class="input" id="memory-name" placeholder="Nama customer"></div>
+                <div class="form-row"><label class="label">Usia</label><input class="input" id="memory-age" placeholder="Contoh: 45"></div>
+                <div class="form-row"><label class="label">Keluhan Utama</label><input class="input" id="memory-complaint" placeholder="Contoh: pegal linu"></div>
+                <div class="form-row"><label class="label">Stage Follow Up</label><input class="input" id="memory-follow-up-stage" placeholder="Contoh: tanya harga / minta testimoni"></div>
+                <div class="form-row"><label class="label">Keberatan</label><input class="input" id="memory-objection" placeholder="Contoh: mahal / belum yakin / tanya BPOM"></div>
+              </div>
+
+              <div class="form-row"><div class="memory-label-row"><label class="label">Summary Memory</label><button class="btn btn-ghost btn-xs" type="button" onclick="tidyMemorySummary()">Rapikan</button></div><textarea class="textarea" id="memory-summary" rows="3" placeholder="Ringkasan pendek agar AI paham konteks customer ini..."></textarea></div>
+              <div class="form-row"><label class="label">Catatan Konteks Customer</label><textarea class="textarea" id="memory-customer-context" rows="3" placeholder="Catatan manual CS, kebutuhan khusus, preferensi, atau konteks penting lainnya..."></textarea></div>
+
+              <div class="memory-actions">
+                <button class="btn btn-primary" onclick="saveCustomerMemory()">Simpan Memory</button>
+                <button class="btn btn-ghost" onclick="clearCustomerMemoryForm()">Kosongkan Form</button>
+              </div>
+            </div>
+
+            <div class="memory-side-pane">
+              <div class="memory-section-title">Profile Keys</div>
+              <div id="memory-profile-keys" class="memory-chip-list"><span class="memory-muted">Belum ada profile.</span></div>
+
+              <div class="memory-section-title memory-history-title">History Terakhir</div>
+              <div id="memory-history-list" class="memory-history-list"><div class="memory-empty">Pilih customer atau masukkan nomor WA untuk melihat history.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-system-panel" id="ai-system-learning-bank" role="tabpanel">
+      <div class="learning-bank-shell">
+        <div class="learning-bank-toolbar">
+          <div>
+            <div class="ai-system-kicker">Learning Bank</div>
+            <h3>Bank Pembelajaran AI</h3>
+            <p>Kumpulkan pertanyaan berulang, keberatan customer, jawaban terbaik, dan insight yang nanti bisa dikirim ke FAQ, template, prompt, atau skill.</p>
+          </div>
+          <div class="learning-bank-search">
+            <input class="input" id="learning-search-input" placeholder="Cari insight / kategori / tag">
+            <button class="btn btn-primary" onclick="loadLearningBank()">Cari</button>
+          </div>
+        </div>
+
+        <div class="learning-bank-stats learning-bank-stats-compact">
+          <button class="learning-status-card active" type="button" data-learning-status="" onclick="setLearningStatus('', this)"><strong id="learning-count-all">0</strong><span>Semua Bahan</span></button>
+          <button class="learning-status-card" type="button" data-learning-status="draft" onclick="setLearningStatus('draft', this)"><strong id="learning-count-draft">0</strong><span>Draft</span></button>
+          <button class="learning-status-card" type="button" data-learning-status="pending" onclick="setLearningStatus('pending', this)"><strong id="learning-count-pending">0</strong><span>Pending Review</span></button>
+        </div>
+
+        <div class="learning-bank-layout">
+          <div class="learning-list-card">
+            <div class="memory-card-head">
+              <strong>Daftar Insight</strong>
+              <button class="btn btn-ghost btn-xs" onclick="newLearningBankItem()">Insight Baru</button>
+            </div>
+            <div id="learning-bank-list" class="learning-bank-list"><div class="memory-empty">Memuat Learning Bank...</div></div>
+          </div>
+
+          <div class="learning-editor-card">
+            <div class="memory-card-head">
+              <strong id="learning-editor-title">Insight Baru</strong>
+              <button class="btn btn-danger btn-xs" onclick="deleteLearningBankItem()">Hapus</button>
+            </div>
+            <input type="hidden" id="learning-id">
+            <div class="learning-form-grid">
+              <div class="form-row"><label class="label">Judul Insight</label><input class="input" id="learning-title" placeholder="Contoh: Customer sering tanya BPOM"></div>
+              <div class="form-row"><label class="label">Kategori</label><select class="input" id="learning-category"><option value="faq">FAQ</option><option value="objection">Objection</option><option value="closing">Closing</option><option value="product">Produk</option><option value="template">Template</option><option value="risk">Risk/Compliance</option><option value="general">General</option></select></div>
+              <div class="form-row"><label class="label">Sumber</label><select class="input" id="learning-source-type"><option value="manual">Manual</option><option value="conversation">Conversation</option><option value="memory">Memory Customer</option><option value="human_chat">Human Chat</option></select></div>
+              <div class="form-row"><label class="label">Status</label><select class="input" id="learning-status"><option value="draft">Draft</option><option value="pending">Pending Review</option></select></div>
+            </div>
+            <div class="form-row"><label class="label">Pola Pertanyaan / Keberatan</label><textarea class="textarea" id="learning-question-pattern" rows="3" placeholder="Contoh: Apakah Sukumba aman untuk diabetes?"></textarea></div>
+            <div class="form-row"><label class="label">Jawaban Rekomendasi</label><textarea class="textarea" id="learning-answer-recommendation" rows="4" placeholder="Tulis jawaban yang dianggap paling aman dan efektif..."></textarea></div>
+            <div class="form-row"><label class="label">Insight / Catatan Belajar</label><textarea class="textarea" id="learning-insight" rows="3" placeholder="Catatan pola, konteks, alasan, atau aturan pemakaian..."></textarea></div>
+            <div class="form-row"><label class="label">Tags</label><input class="input" id="learning-tags" placeholder="bpom, diabetes, objection"></div>
+            <div class="learning-actions">
+              <button class="btn btn-primary" onclick="saveLearningBankItem()">Simpan Draft</button>
+              <button class="btn btn-ghost" onclick="sendLearningToReview()">Kirim ke Review</button>
+              <button class="btn btn-ghost" onclick="newLearningBankItem()">Kosongkan Form</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-system-panel" id="ai-system-skill-system" role="tabpanel">
+      <div class="skill-system-shell">
+        <div class="skill-system-toolbar">
+          <div>
+            <div class="ai-system-kicker">Skill System</div>
+            <h3>Modul Skill AI</h3>
+            <p>Kelola kemampuan khusus AI seperti konsultasi, produk, closing, komplain, follow up, dan red flag agar respons lebih konsisten.</p>
+          </div>
+          <div class="skill-system-search">
+            <input class="input" id="skill-search-input" placeholder="Cari skill / kategori / trigger">
+            <button class="btn btn-primary" onclick="loadAiSkills()">Cari</button>
+          </div>
+        </div>
+
+        <div class="skill-system-stats">
+          <button class="skill-status-card active" type="button" data-skill-active="" onclick="setSkillFilter('', this)"><strong id="skill-count-all">0</strong><span>Semua</span></button>
+          <button class="skill-status-card" type="button" data-skill-active="1" onclick="setSkillFilter('1', this)"><strong id="skill-count-active">0</strong><span>Aktif</span></button>
+          <button class="skill-status-card" type="button" data-skill-active="0" onclick="setSkillFilter('0', this)"><strong id="skill-count-inactive">0</strong><span>Nonaktif</span></button>
+        </div>
+
+        <div class="skill-system-layout">
+          <div class="skill-list-card">
+            <div class="memory-card-head">
+              <strong>Daftar Skill</strong>
+              <button class="btn btn-ghost btn-xs" onclick="newAiSkill()">Skill Baru</button>
+            </div>
+            <div id="skill-system-list" class="skill-system-list"><div class="memory-empty">Memuat skill...</div></div>
+          </div>
+
+          <div class="skill-editor-card">
+            <div class="memory-card-head">
+              <strong id="skill-editor-title">Skill Baru</strong>
+              <button class="btn btn-danger btn-xs" onclick="deleteAiSkill()">Hapus</button>
+            </div>
+            <input type="hidden" id="skill-id">
+            <div class="skill-form-grid">
+              <div class="form-row"><label class="label">Nama Skill</label><input class="input" id="skill-name" placeholder="Contoh: Konsultasi Vitalitas"></div>
+              <div class="form-row"><label class="label">Skill Key</label><input class="input" id="skill-key" placeholder="consultation_vitality"></div>
+              <div class="form-row"><label class="label">Kategori</label><select class="input" id="skill-category"><option value="consultation">Consultation</option><option value="product">Product</option><option value="closing">Closing</option><option value="complaint">Complaint</option><option value="follow_up">Follow Up</option><option value="risk">Risk/Red Flag</option><option value="general">General</option></select></div>
+              <div class="form-row"><label class="label">Prioritas</label><input class="input" id="skill-priority" type="number" min="1" max="100" value="50"></div>
+              <div class="form-row"><label class="label">Status</label><select class="input" id="skill-active"><option value="1">Aktif</option><option value="0">Nonaktif</option></select></div>
+            </div>
+            <div class="form-row"><label class="label">Deskripsi</label><textarea class="textarea" id="skill-description" rows="3" placeholder="Kapan skill ini dipakai dan tujuan jawabannya..."></textarea></div>
+            <div class="form-row"><label class="label">Trigger Rules</label><textarea class="textarea" id="skill-trigger-rules" rows="4" placeholder="Intent, kata kunci, kondisi customer, atau stage yang memicu skill ini..."></textarea></div>
+            <div class="form-row"><label class="label">Response Rules</label><textarea class="textarea" id="skill-response-rules" rows="4" placeholder="Gaya jawab, urutan pertanyaan, struktur respons, dan target output..."></textarea></div>
+            <div class="form-row"><label class="label">Guardrails</label><textarea class="textarea" id="skill-guardrails" rows="3" placeholder="Batasan klaim, kondisi harus handoff, hal yang tidak boleh dijawab..."></textarea></div>
+            <div class="form-row"><label class="label">Contoh Respons</label><textarea class="textarea" id="skill-example-response" rows="3" placeholder="Contoh jawaban ideal untuk skill ini..."></textarea></div>
+            <div class="skill-actions">
+              <button class="btn btn-primary" onclick="saveAiSkill()">Simpan Skill</button>
+              <button class="btn btn-ghost" onclick="newAiSkill()">Kosongkan Form</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-system-panel" id="ai-system-review-approval" role="tabpanel">
+      <div class="review-approval-shell">
+        <div class="review-approval-toolbar">
+          <div>
+            <div class="ai-system-kicker">Review &amp; Approval</div>
+            <h3>Antrian Validasi AI</h3>
+            <p>Review insight dari Learning Bank sebelum dipakai untuk FAQ, template, prompt, atau skill. Approve yang layak, reject yang berisiko.</p>
+          </div>
+          <div class="review-approval-search">
+            <input class="input" id="review-search-input" placeholder="Cari item review / kategori / tag">
+            <button class="btn btn-primary" onclick="loadReviewApproval()">Cari</button>
+          </div>
+        </div>
+
+        <div class="review-approval-stats">
+          <button class="review-status-card active" type="button" onclick="setReviewStatus('pending', this)"><strong id="review-count-pending">0</strong><span>Pending</span></button>
+          <button class="review-status-card" type="button" onclick="setReviewStatus('approved', this)"><strong id="review-count-approved">0</strong><span>Approved</span></button>
+          <button class="review-status-card" type="button" onclick="setReviewStatus('rejected', this)"><strong id="review-count-rejected">0</strong><span>Rejected</span></button>
+          <button class="review-status-card" type="button" onclick="setReviewStatus('', this)"><strong id="review-count-all">0</strong><span>Semua</span></button>
+        </div>
+
+        <div class="review-approval-layout">
+          <div class="review-list-card">
+            <div class="memory-card-head"><strong>Daftar Review</strong><button class="btn btn-ghost btn-xs" onclick="loadReviewApproval()">Refresh</button></div>
+            <div id="review-approval-list" class="review-approval-list"><div class="memory-empty">Memuat antrean review...</div></div>
+          </div>
+
+          <div class="review-detail-card">
+            <div class="memory-card-head"><strong id="review-detail-title">Pilih Item Review</strong><span id="review-detail-status" class="learning-status-pill status-pending">pending</span></div>
+            <input type="hidden" id="review-item-id">
+            <div class="review-readonly-grid">
+              <div><span>Kategori</span><strong id="review-category">-</strong></div>
+              <div><span>Sumber</span><strong id="review-source-type">-</strong></div>
+              <div><span>Updated</span><strong id="review-updated-at">-</strong></div>
+              <div><span>Tags</span><strong id="review-tags">-</strong></div>
+            </div>
+            <div class="form-row"><label class="label">Pola Pertanyaan / Keberatan</label><textarea class="textarea" id="review-question-pattern" rows="3" readonly></textarea></div>
+            <div class="form-row"><label class="label">Jawaban Rekomendasi</label><textarea class="textarea" id="review-answer-recommendation" rows="4" readonly></textarea></div>
+            <div class="form-row"><label class="label">Insight / Catatan Belajar</label><textarea class="textarea" id="review-insight" rows="3" readonly></textarea></div>
+            <div class="form-row"><label class="label">Catatan Reviewer</label><textarea class="textarea" id="review-note" rows="3" placeholder="Alasan approve/reject atau catatan revisi..."></textarea></div>
+            <div class="review-actions">
+              <button class="btn btn-primary" onclick="approveReviewItem()">Approve</button>
+              <button class="btn btn-danger" onclick="rejectReviewItem()">Reject</button>
+              <button class="btn btn-ghost" onclick="clearReviewSelection()">Kosongkan Form</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-system-panel" id="ai-system-conversation-scoring" role="tabpanel">
+      <div class="conversation-scoring-shell">
+        <div class="conversation-scoring-toolbar">
+          <div>
+            <div class="ai-system-kicker">Conversation Scoring</div>
+            <h3>Skor Kualitas Percakapan</h3>
+            <p>Nilai respons AI berdasarkan relevansi, empati, keamanan, peluang closing, dan risiko overclaim.</p>
+          </div>
+          <div class="conversation-scoring-search">
+            <input class="input" id="scoring-search-input" placeholder="Cari nomor / pesan / isu">
+            <button class="btn btn-primary" onclick="loadConversationScoring()">Cari</button>
+          </div>
+        </div>
+
+        <div class="conversation-scoring-stats">
+          <button class="scoring-status-card active" type="button" onclick="setScoringRisk('', this)"><strong id="scoring-count-total">0</strong><span>Semua</span></button>
+          <button class="scoring-status-card" type="button" onclick="setScoringRisk('low', this)"><strong id="scoring-count-low">0</strong><span>Low Risk</span></button>
+          <button class="scoring-status-card" type="button" onclick="setScoringRisk('medium', this)"><strong id="scoring-count-medium">0</strong><span>Medium</span></button>
+          <button class="scoring-status-card" type="button" onclick="setScoringRisk('high', this)"><strong id="scoring-count-high">0</strong><span>High Risk</span></button>
+        </div>
+
+        <div class="conversation-scoring-layout">
+          <div class="scoring-list-card">
+            <div class="memory-card-head"><strong>Daftar Percakapan</strong><button class="btn btn-ghost btn-xs" onclick="loadConversationScoring()">Refresh</button></div>
+            <div id="conversation-scoring-list" class="conversation-scoring-list"><div class="memory-empty">Memuat conversation scoring...</div></div>
+          </div>
+
+          <div class="scoring-detail-card">
+            <div class="memory-card-head"><strong id="scoring-detail-title">Pilih Percakapan</strong><span id="scoring-risk-badge" class="learning-status-pill status-draft">preview</span></div>
+            <div class="scoring-report-hero">
+              <div class="scoring-total-circle"><strong id="scoring-score">-</strong><span>Total Score</span></div>
+              <div class="scoring-report-summary">
+                <div><span>Log ID</span><strong id="scoring-log-id">-</strong></div>
+                <div><span>Risk Level</span><strong id="scoring-risk-level">-</strong></div>
+                <div><span>Status</span><strong id="scoring-status">Preview</strong></div>
+              </div>
+            </div>
+            <div class="scoring-metric-list">
+              <div class="scoring-metric"><div><span>Relevansi</span><strong id="scoring-relevance">0</strong></div><b><i id="scoring-relevance-bar"></i></b></div>
+              <div class="scoring-metric"><div><span>Empati</span><strong id="scoring-empathy">0</strong></div><b><i id="scoring-empathy-bar"></i></b></div>
+              <div class="scoring-metric"><div><span>Safety</span><strong id="scoring-safety">0</strong></div><b><i id="scoring-safety-bar"></i></b></div>
+              <div class="scoring-metric"><div><span>Closing</span><strong id="scoring-closing">0</strong></div><b><i id="scoring-closing-bar"></i></b></div>
+            </div>
+            <div class="scoring-chat-grid">
+              <div><label class="label">Customer Message</label><div id="scoring-user-message" class="scoring-text-box">Pilih percakapan untuk melihat pesan customer.</div></div>
+              <div><label class="label">AI Response</label><div id="scoring-ai-response" class="scoring-text-box">Pilih percakapan untuk melihat jawaban AI.</div></div>
+            </div>
+            <div class="scoring-insight-grid">
+              <div><label class="label">Issues</label><div id="scoring-issues" class="scoring-note-box">-</div></div>
+              <div><label class="label">Recommendation</label><div id="scoring-recommendation" class="scoring-note-box">-</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-system-panel" id="ai-system-human-handoff" role="tabpanel">
+      <div class="human-handoff-shell">
+        <div class="human-handoff-toolbar">
+          <div>
+            <div class="ai-system-kicker">Human Handoff</div>
+            <h3>Antrean Eskalasi CS</h3>
+            <p>Ticket dari percakapan yang perlu ditangani manusia: komplain, risk kesehatan, overclaim, customer panas, pembayaran, atau kasus yang AI tidak boleh paksa jawab.</p>
+          </div>
+          <div class="human-handoff-search">
+            <button class="handoff-settings-btn" type="button" onclick="openHandoffSettings()" title="Pengaturan Human Handoff" aria-label="Pengaturan Human Handoff"><span>⚙</span></button>
+            <input class="input" id="handoff-search-input" placeholder="Cari nomor / alasan / owner">
+            <button class="btn btn-primary" onclick="loadHumanHandoffs()">Cari</button>
+          </div>
+        </div>
+
+        <div class="handoff-settings-panel" id="handoff-settings-panel" hidden>
+          <div class="memory-card-head"><strong>Pengaturan Human Handoff</strong><button class="btn btn-ghost btn-xs" type="button" onclick="closeHandoffSettings()">Tutup</button></div>
+          <div class="handoff-settings-grid">
+            <label class="handoff-toggle"><input type="checkbox" id="handoff-enable-risk"><span>Masukkan risk dari Conversation Scoring</span></label>
+            <label class="handoff-toggle"><input type="checkbox" id="handoff-medium-risk"><span>Medium risk ikut masuk Handoff</span></label>
+            <label class="handoff-toggle"><input type="checkbox" id="handoff-enable-keywords"><span>Masukkan keyword sensitif</span></label>
+            <label class="handoff-toggle"><input type="checkbox" id="handoff-enable-followup"><span>Masukkan FU belum closing</span></label>
+            <div class="form-row"><label class="label">FU Setelah Berapa Hari</label><input class="input" id="handoff-followup-days" type="number" min="1" step="1"></div>
+            <div class="form-row"><label class="label">Idle Chat Minimal (Jam)</label><input class="input" id="handoff-idle-hours" type="number" min="1" step="1"></div>
+            <div class="form-row"><label class="label">Minimal Jumlah Chat</label><input class="input" id="handoff-min-chat-count" type="number" min="1" step="1"></div>
+            <div class="form-row handoff-settings-wide"><label class="label">Keyword Sensitif</label><textarea class="textarea" id="handoff-keywords" rows="4" placeholder="Pisahkan dengan koma atau baris baru"></textarea></div>
+            <div class="form-row handoff-settings-wide"><label class="label">Keyword Follow Up</label><textarea class="textarea" id="handoff-followup-keywords" rows="3" placeholder="Contoh: nanti, belum yakin, mahal, tanya suami"></textarea></div>
+          </div>
+          <div class="handoff-settings-actions">
+            <button class="btn btn-primary" type="button" onclick="saveHandoffSettings()">Simpan Pengaturan</button>
+            <button class="btn btn-ghost" type="button" onclick="loadHandoffSettings()">Muat Ulang</button>
+          </div>
+        </div>
+
+        <div class="human-handoff-stats">
+          <button class="handoff-status-card active" type="button" onclick="setHandoffStatus('', this)"><strong id="handoff-count-total">0</strong><span>Semua</span></button>
+          <button class="handoff-status-card" type="button" onclick="setHandoffStatus('open', this)"><strong id="handoff-count-open">0</strong><span>Open</span></button>
+          <button class="handoff-status-card" type="button" onclick="setHandoffStatus('in_progress', this)"><strong id="handoff-count-progress">0</strong><span>Diambil CS</span></button>
+          <button class="handoff-status-card" type="button" onclick="setHandoffStatus('resolved', this)"><strong id="handoff-count-resolved">0</strong><span>Selesai</span></button>
+          <button class="handoff-status-card" type="button" onclick="setHandoffStatus('archived', this)"><strong id="handoff-count-archived">0</strong><span>Archive</span></button>
+        </div>
+
+        <div class="human-handoff-layout">
+          <div class="handoff-list-card">
+            <div class="memory-card-head"><strong>Ticket Handoff</strong><button class="btn btn-ghost btn-xs" onclick="loadHumanHandoffs()">Refresh</button></div>
+            <div id="human-handoff-list" class="human-handoff-list"><div class="memory-empty">Memuat ticket handoff...</div></div>
+          </div>
+
+          <div class="handoff-detail-card">
+            <div class="memory-card-head"><strong id="handoff-detail-title">Pilih Tiket</strong><span id="handoff-detail-status" class="learning-status-pill status-draft">preview</span></div>
+            <div class="handoff-summary-grid">
+              <div><span>Ticket ID</span><strong id="handoff-ticket-id">-</strong></div>
+              <div><span>Log ID</span><strong id="handoff-log-id">-</strong></div>
+              <div><span>Nomor WA</span><strong id="handoff-user-number">-</strong></div>
+              <div><span>Prioritas</span><strong id="handoff-priority">-</strong></div>
+              <div><span>Dibuat</span><strong id="handoff-created-at">-</strong></div>
+              <div><span>Update</span><strong id="handoff-updated-at">-</strong></div>
+            </div>
+            <div class="handoff-reason-box">
+              <label class="label">Alasan Handoff</label>
+              <div id="handoff-reason" class="handoff-text-box">Pilih tiket untuk melihat alasan eskalasi.</div>
+            </div>
+            <div class="handoff-chat-grid">
+              <div><label class="label">Customer Message</label><div id="handoff-customer-message" class="handoff-text-box">-</div></div>
+              <div><label class="label">AI Response</label><div id="handoff-ai-response" class="handoff-text-box">-</div></div>
+            </div>
+            <div class="handoff-work-grid">
+              <div class="form-row"><label class="label">Owner CS</label><input class="input" id="handoff-owner" placeholder="Contoh: Syifa / Admin / CS 1"></div>
+              <div class="form-row"><label class="label">Catatan Penanganan / Auto Balas</label><textarea class="textarea" id="handoff-notes" rows="4" placeholder="Tulis catatan CS atau isi pesan yang akan dikirim saat klik Auto Balas..."></textarea></div>
+            </div>
+            <div class="handoff-actions">
+              <button class="btn btn-primary" id="handoff-primary-action" onclick="runHumanHandoffPrimaryAction()" disabled>Ambil Tiket</button>
+              <button class="btn btn-primary" id="handoff-auto-reply-action" onclick="autoReplyHumanHandoff()" disabled>Auto Balas</button>
+              <button class="btn btn-danger" id="handoff-cancel-action" onclick="cancelHumanHandoff()" disabled>Archive</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-system-panel" id="ai-system-human-chat" role="tabpanel">
+      <div class="human-chat-shell">
+        <div class="human-chat-toolbar">
+          <div>
+            <div class="ai-system-kicker">Human Chat</div>
+            <h3>Ruang Chat CS</h3>
+            <p>Chat manual untuk ticket Human Handoff yang sudah diambil CS. AI dipause secara operasional sampai ticket diselesaikan.</p>
+          </div>
+          <div class="human-chat-search">
+            <input class="input" id="human-chat-search-input" placeholder="Cari nomor / owner / alasan">
+            <button class="btn btn-primary" onclick="loadHumanChatTickets()">Cari</button>
+          </div>
+        </div>
+
+        <div class="human-chat-layout">
+          <div class="human-chat-list-card">
+            <div class="memory-card-head"><strong id="human-chat-list-title">Chat Diambil CS</strong><button class="btn btn-ghost btn-xs" onclick="loadHumanChatTickets()">Refresh</button></div>
+            <div class="human-chat-filter" role="tablist" aria-label="Filter Human Chat">
+              <button class="active" type="button" onclick="setHumanChatStatus('in_progress', this)">Diambil</button>
+              <button type="button" onclick="setHumanChatStatus('resolved', this)">Selesai</button>
+              <button type="button" onclick="setHumanChatStatus('archived', this)">Archive</button>
+            </div>
+            <div id="human-chat-ticket-list" class="human-chat-ticket-list"><div class="memory-empty">Memuat ticket yang sedang diambil CS...</div></div>
+          </div>
+
+          <div class="human-chat-room-card">
+            <div class="human-chat-room-head">
+              <div><strong id="human-chat-title">Pilih Chat</strong><span id="human-chat-subtitle">Ticket Human Handoff yang statusnya Diambil CS akan muncul di sini.</span></div>
+              <div class="human-chat-room-actions">
+                <button class="btn btn-primary btn-xs" id="human-chat-resolve-btn" onclick="resolveHumanChatTicket()" disabled>Selesai</button>
+                <button class="btn btn-danger btn-xs" id="human-chat-archive-btn" onclick="archiveHumanChatTicket()" disabled>Archive</button>
+              </div>
+            </div>
+            <div id="human-chat-history" class="human-chat-history"><div class="memory-empty">Pilih ticket untuk melihat chat.</div></div>
+            <div class="human-chat-compose">
+              <textarea class="textarea" id="human-chat-message" rows="3" placeholder="Tulis balasan CS ke customer..."></textarea>
+              <button class="btn btn-primary" id="human-chat-send-btn" onclick="sendHumanChatMessage()" disabled>Kirim</button>
+            </div>
+          </div>
+
+          <div class="human-chat-side-card">
+            <div class="memory-card-head"><strong>Detail Ticket</strong></div>
+            <div class="human-chat-detail-grid">
+              <div><span>Ticket</span><strong id="human-chat-ticket-id">-</strong></div>
+              <div><span>Nomor WA</span><strong id="human-chat-user-number">-</strong></div>
+              <div><span>Owner</span><strong id="human-chat-owner">-</strong></div>
+              <div><span>Prioritas</span><strong id="human-chat-priority">-</strong></div>
+            </div>
+            <label class="label">Alasan Handoff</label>
+            <div id="human-chat-reason" class="human-chat-note-box">-</div>
+            <label class="label">Catatan Terakhir</label>
+            <div id="human-chat-notes" class="human-chat-note-box">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

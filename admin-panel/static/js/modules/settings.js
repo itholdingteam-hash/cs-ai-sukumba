@@ -1,22 +1,6 @@
 // ================================================================
 // SETTINGS
 // ================================================================
-var settingsLastTab = "company";
-
-function showSettingsTab(tabName, tabEl) {
-  settingsLastTab = tabName;
-  document.querySelectorAll("#section-settings .settings-tab-card").forEach(function (tab) {
-    tab.classList.remove("active");
-  });
-  if (tabEl) tabEl.classList.add("active");
-
-  document.querySelectorAll("#section-settings .settings-panel").forEach(function (panel) {
-    panel.classList.toggle("active", panel.getAttribute("data-settings-tab") === tabName);
-  });
-
-  if (tabName === "telegram") loadTgUsers();
-}
-
 async function loadSettings(){
   var s = await api.get("/api/settings");
   document.getElementById("s-name").value = s.company_name||"";
@@ -33,15 +17,6 @@ async function loadSettings(){
     : "";
   document.getElementById("s-temp").value = s.ai_temperature||"0.7";
   document.getElementById("s-tokens").value = s.ai_max_tokens||"500";
-  document.getElementById("s-wa-guard-enabled").checked = (s.wa_safety_guard_enabled || "1") === "1";
-  document.getElementById("s-wa-auto-paused").checked = (s.wa_safety_auto_reply_paused || "0") === "1";
-  document.getElementById("s-wa-manual-only").checked = (s.wa_safety_manual_only || "0") === "1";
-  document.getElementById("s-wa-optout").checked = (s.wa_safety_append_optout || "1") === "1";
-  document.getElementById("s-wa-block-new").checked = (s.wa_safety_block_new_outbound || "1") === "1";
-  document.getElementById("s-wa-min-delay").value = s.wa_safety_min_delay_seconds || "20";
-  document.getElementById("s-wa-max-delay").value = s.wa_safety_max_delay_seconds || "90";
-  document.getElementById("s-wa-daily-limit").value = s.wa_safety_daily_auto_limit || "50";
-  document.getElementById("s-wa-risky-words").value = s.wa_safety_risky_words || "";
   var tgTokenInput = document.getElementById("s-tg-token");
   tgTokenInput.value = "";
   tgTokenInput.placeholder = s.telegram_bot_token_configured
@@ -63,20 +38,6 @@ async function saveSettings(){
     ai_max_tokens: document.getElementById("s-tokens").value
   });
   toast("Settings disimpan!");
-}
-async function saveWaSafetySettings(){
-  await api.post("/api/settings", {
-    wa_safety_guard_enabled: document.getElementById("s-wa-guard-enabled").checked ? "1" : "0",
-    wa_safety_auto_reply_paused: document.getElementById("s-wa-auto-paused").checked ? "1" : "0",
-    wa_safety_manual_only: document.getElementById("s-wa-manual-only").checked ? "1" : "0",
-    wa_safety_append_optout: document.getElementById("s-wa-optout").checked ? "1" : "0",
-    wa_safety_block_new_outbound: document.getElementById("s-wa-block-new").checked ? "1" : "0",
-    wa_safety_min_delay_seconds: document.getElementById("s-wa-min-delay").value || "20",
-    wa_safety_max_delay_seconds: document.getElementById("s-wa-max-delay").value || "90",
-    wa_safety_daily_auto_limit: document.getElementById("s-wa-daily-limit").value || "50",
-    wa_safety_risky_words: document.getElementById("s-wa-risky-words").value || ""
-  });
-  toast("WA Safety Guard disimpan");
 }
 async function saveTgToken(){
   await api.post("/api/settings", {telegram_bot_token: document.getElementById("s-tg-token").value});

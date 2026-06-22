@@ -8,6 +8,11 @@ from datetime import datetime, timezone, timedelta
 from . import templates as fallback_templates
 
 
+def looks_like_legacy_order_greeting(text):
+    lower = html.unescape(str(text or '')).lower()
+    return 'alamat jalan' in lower and 'rt' in lower and 'rw' in lower and 'pembayaran: cod/trf' in lower
+
+
 def looks_like_unsafe_diabetes_template(text):
     lower = html.unescape(str(text or '')).lower()
     return (
@@ -70,7 +75,7 @@ class TemplateService:
 
     def greeting_syifa(self, raw_text=''):
         dyn = self.dynamic('Greeting', None)
-        if dyn:
+        if dyn and not looks_like_legacy_order_greeting(dyn):
             return dyn
         return fallback_templates.greeting(raw_text, greeting_label_for_message(raw_text))
 

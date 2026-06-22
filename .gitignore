@@ -12,6 +12,7 @@ logs/
 tmp/
 temp/
 admin-panel/static/uploads/
+admin-panel/Sistem-AI/
 wa-gateway/auth_info_baileys/
 auth_info_baileys/
 
@@ -41,3 +42,4 @@ __pycache__/
 Thumbs.db
 .idea/
 .vscode/
+.agents/
