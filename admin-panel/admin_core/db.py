@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import sqlite3
 
-from .default_templates import DEFAULT_CS_TEMPLATES, default_settings
+from .default_templates import DEFAULT_CS_TEMPLATES, DEFAULT_FAQS, default_settings
 
 
 _db_file = None
@@ -291,6 +291,19 @@ def _seed_defaults(cursor):
                 VALUES
                     (?, ?, 1, ?, ?)
             """, (item['title'], item['content'], now, now))
+
+    for item in DEFAULT_FAQS:
+        existing = cursor.execute(
+            'SELECT id FROM faqs WHERE LOWER(question) = LOWER(?) LIMIT 1',
+            (item['question'],)
+        ).fetchone()
+        if not existing:
+            cursor.execute("""
+                INSERT INTO faqs
+                    (question, answer, image_url, active)
+                VALUES
+                    (?, ?, ?, 1)
+            """, (item['question'], item['answer'], item.get('image_url') or ''))
 
 
 def _migrate_testimonials_from_faqs(cursor):

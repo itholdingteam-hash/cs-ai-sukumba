@@ -97,6 +97,18 @@ class TemplateService:
     def aturan_minum(self):
         return self._dynamic_or_fallback('Aturan Minum', fallback_templates.aturan_minum)
 
+    def minimum_age(self):
+        return self._dynamic_or_fallback('Batas Usia', fallback_templates.minimum_age)
+
+    def manfaat_sukumba(self):
+        return self._dynamic_or_fallback('Manfaat Sukumba', fallback_templates.manfaat_sukumba)
+
+    def side_effects(self):
+        return self._dynamic_or_fallback('Efek Samping', fallback_templates.side_effects)
+
+    def sukumba_difference(self):
+        return self._dynamic_or_fallback('Pembeda Sukumba', fallback_templates.sukumba_difference)
+
     def ask_ever_consumed(self):
         return self._dynamic_or_fallback('Pernah Konsumsi', fallback_templates.ask_ever_consumed)
 

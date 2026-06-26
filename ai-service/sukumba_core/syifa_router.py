@@ -6,6 +6,92 @@ from dataclasses import dataclass
 from typing import Callable
 
 
+def _normalize_form_label(label):
+    return re.sub(r'[^a-z0-9]+', '', html.unescape(str(label or '')).lower())
+
+
+def _submitted_order_form_fields(raw_text):
+    return set(_submitted_order_form_data(raw_text).keys())
+
+
+def _submitted_order_form_data(raw_text):
+    label_map = {
+        'nama': 'name',
+        'namapenerima': 'name',
+        'alamat': 'address',
+        'alamatlengkap': 'address',
+        'alamatjalan': 'address',
+        'jalan': 'address',
+        'rt': 'rt',
+        'rw': 'rw',
+        'rtrw': 'rt_rw',
+        'kelurahan': 'village',
+        'desa': 'village',
+        'desakelurahan': 'village',
+        'kecamatan': 'district',
+        'kabkota': 'city',
+        'kabupatenkota': 'city',
+        'kabupaten': 'city',
+        'kota': 'city',
+        'provinsi': 'province',
+        'nohp': 'phone',
+        'nohandphone': 'phone',
+        'nomorhp': 'phone',
+        'hp': 'phone',
+        'wa': 'phone',
+        'tfcod': 'payment',
+        'codtrf': 'payment',
+        'pembayaran': 'payment',
+        'paket': 'package',
+        'paket1box2box': 'package',
+        'pilihanpaket': 'package',
+        'keluhan': 'complaint',
+        'keluhansakit': 'complaint',
+        'keluhansakityangdirasakan': 'complaint',
+    }
+    fields = {}
+    for line in str(raw_text or '').splitlines():
+        match = re.match(r'^\s*([^:]{2,90})\s*:\s*(.*)$', line)
+        if not match:
+            continue
+        key = label_map.get(_normalize_form_label(match.group(1)))
+        value = match.group(2).strip()
+        if key and value:
+            fields[key] = value
+    return fields
+
+
+def looks_like_submitted_order_form(raw_text):
+    fields = _submitted_order_form_fields(raw_text)
+    core = {'name', 'address', 'district', 'city', 'province', 'phone', 'payment'}
+    return len(fields) >= 4 and len(fields.intersection(core)) >= 3
+
+
+def render_order_form_summary(raw_text):
+    fields = _submitted_order_form_data(raw_text)
+    address_parts = [
+        fields.get('address'),
+        fields.get('rt_rw') or '/'.join(x for x in [fields.get('rt'), fields.get('rw')] if x),
+        fields.get('village'),
+        fields.get('district'),
+        fields.get('city'),
+        fields.get('province'),
+    ]
+    address = ', '.join(part for part in address_parts if part)
+    rows = [
+        ('Nama', fields.get('name')),
+        ('HP', fields.get('phone')),
+        ('Paket', fields.get('package')),
+        ('Pembayaran', fields.get('payment')),
+        ('Alamat', address),
+        ('Keluhan', fields.get('complaint')),
+    ]
+    lines = [f"{label}: {value}" for label, value in rows if value]
+    if not lines:
+        return ''
+    return "Ringkasan order:\n" + "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class SyifaRouterDeps:
     is_identity_question: Callable
@@ -34,6 +120,10 @@ class SyifaRouterDeps:
     template_ongkir_info: Callable
     template_kurir_info: Callable
     template_promo_sukumba: Callable
+    template_manfaat_sukumba: Callable
+    template_minimum_age: Callable
+    template_side_effects: Callable
+    template_sukumba_difference: Callable
     template_aturan_minum: Callable
     template_cara_konsumsi: Callable
     template_ask_ever_consumed: Callable
@@ -60,7 +150,13 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
     if deps.is_identity_question(lower) or deps.is_name_question(lower) or deps.is_clear_closing(lower):
         return None
 
-    if re.search(r'\b(sudah|udh|udah)\b.*\b(tf|transfer|bayar)\b|\bbukti\s+(tf|transfer|pembayaran)\b', lower):
+    if re.search(
+        r'\b(sudah|udh|udah)\b.*\b(tf|transfer|bayar)\b'
+        r'|\bbukti\s+(tf|transfer|pembayaran)\b'
+        r'|\b(sudah|udh|udah|telah)\b.*\b(terima|menerima|nerima|diterima|sampai)\b.*\b(paket|barang|pesanan|cod)\b'
+        r'|\b(paket|barang|pesanan|cod)\b.*\b(sudah|udh|udah|telah)\b.*\b(terima|menerima|nerima|diterima|sampai)\b',
+        lower
+    ):
         return (
             deps.template_order_success(),
             'post_order',
@@ -110,6 +206,26 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             },
         )
 
+    if looks_like_submitted_order_form(raw_text):
+        summary = render_order_form_summary(raw_text)
+        summary_block = f"\n\n{summary}" if summary else ""
+        return (
+            "Terima kasih Kak, data ordernya sudah CS Syifa terima."
+            f"{summary_block}\n\n"
+            "CS Syifa cek dulu alamat, pilihan paket, dan ongkirnya supaya total pembayaran tidak salah. "
+            "Nomor rekening atau nominal transfer nanti dikirim setelah totalnya sudah terkonfirmasi ya Kak.",
+            'order',
+            'syifa_order_form_received_template',
+            {
+                'active_flow': 'order',
+                'active_stage': 'reviewing_order_form',
+                'last_question_id': 'review_order_form',
+                'pending_slot': 'order_review',
+                'last_offer_type': 'order_form',
+                'state_confidence': 'high',
+            },
+        )
+
     if re.search(r'\b(tf|transfer|rekening(?:nya)?|no\s*rek|nomor\s*rekening|bca|bayar\s+transfer|total\s+tf)\b', lower):
         return (
             deps.template_transfer_info(),
@@ -135,6 +251,23 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             {
                 'start_order': starts_order,
                 'order_prefill': deps.order_prefill_for_choice(raw_text, payment),
+                'active_flow': 'order',
+                'active_stage': 'awaiting_order_form',
+                'last_question_id': 'ask_order_form',
+                'pending_slot': 'order_form',
+                'last_offer_type': 'order_form',
+                'state_confidence': 'high',
+            }
+        )
+
+    if re.search(r'\b(cod|bayar\s+di\s+tempat)\b', lower) and deps.is_package_choice_request(lower):
+        return (
+            deps.package_choice_reply(raw_text),
+            'order_cod',
+            'syifa_cod_package_template',
+            {
+                'start_order': True,
+                'order_prefill': deps.order_prefill_for_choice(raw_text, 'COD'),
                 'active_flow': 'order',
                 'active_stage': 'awaiting_order_form',
                 'last_question_id': 'ask_order_form',
@@ -228,6 +361,38 @@ def route_syifa_template(raw_text, history=None, profile=None, deps=None):
             deps.template_promo_sukumba(),
             'product_info',
             'syifa_promo_template',
+            deps.product_context_updates('high')
+        )
+
+    if re.search(r'\b(manfaat|khasiat|kegunaan|fungsi|faedah)\b', lower):
+        return (
+            deps.template_manfaat_sukumba(),
+            'product_info',
+            'syifa_benefit_template',
+            deps.product_context_updates('high')
+        )
+
+    if re.search(r'\b(umur|usia)\b.{0,40}\b(minum|konsumsi|boleh|diperbolehkan|untuk)\b|\b(berapa\s+umur|umur\s+berapa|usia\s+berapa)\b', lower):
+        return (
+            deps.template_minimum_age(),
+            'product_info',
+            'syifa_minimum_age_template',
+            deps.product_context_updates('high')
+        )
+
+    if re.search(r'\b(efek\s+samping|side\s*effect|alergi|memicu\s+alergi)\b', lower):
+        return (
+            deps.template_side_effects(),
+            'product_safety',
+            'syifa_side_effects_template',
+            deps.product_context_updates('high')
+        )
+
+    if re.search(r'\b(beda|berbeda|bedanya|perbedaan|beda\s+dari\s+yang\s+lain|keunggulan|unggul|lebih\s+baik)\b', lower):
+        return (
+            deps.template_sukumba_difference(),
+            'product_info',
+            'syifa_difference_template',
             deps.product_context_updates('high')
         )
 

@@ -62,6 +62,12 @@ html,body{
   background:var(--amber);
 }
 
+.dot.connecting{
+  background:var(--amber);
+  box-shadow:0 0 8px var(--amber);
+  animation:pulse 1.1s infinite;
+}
+
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
 .main{
@@ -1732,6 +1738,223 @@ select:focus-visible{
   box-shadow:0 6px 18px rgba(0,0,0,.10);
 }
 
+.test-ai-card{
+  overflow:hidden;
+}
+
+.test-ai-phone{
+  overflow:hidden;
+  border:1px solid rgba(12,120,96,.38);
+  border-radius:8px;
+  background:#0b141a;
+}
+
+.test-ai-wa-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  color:#e9edef;
+  background:#075e54;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.test-ai-wa-head strong,
+.test-ai-wa-head span{
+  display:block;
+}
+
+.test-ai-wa-head strong{
+  font-size:14px;
+  line-height:1.25;
+}
+
+.test-ai-wa-head span{
+  margin-top:2px;
+  color:rgba(233,237,239,.76);
+  font-size:11px;
+}
+
+.test-ai-avatar{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  flex:0 0 34px;
+  color:#075e54;
+  background:#d9fdd3;
+  font-size:12px;
+  font-weight:800;
+}
+
+.test-ai-chat.chat-box{
+  height:min(62vh,620px);
+  min-height:430px;
+  border:0;
+  border-radius:0;
+  padding:18px 18px 14px;
+  gap:8px;
+  background:
+    radial-gradient(circle at 18px 18px, rgba(255,255,255,.045) 0 1px, transparent 1.6px) 0 0 / 34px 34px,
+    linear-gradient(rgba(11,20,26,.86), rgba(11,20,26,.86)),
+    #111b21;
+}
+
+.test-ai-empty{
+  margin:auto;
+  padding:7px 12px;
+  border-radius:8px;
+  color:rgba(233,237,239,.72);
+  background:rgba(32,44,51,.88);
+  font-size:12px;
+}
+
+.test-ai-card .chat-msg{
+  width:100%;
+}
+
+.test-ai-card .chat-bubble{
+  position:relative;
+  width:max-content;
+  max-width:min(76%, 680px);
+  padding:7px 10px 18px;
+  border:0;
+  border-radius:8px;
+  color:#111b21;
+  box-shadow:0 1px 1px rgba(0,0,0,.18);
+  white-space:pre-wrap;
+}
+
+.test-ai-card .chat-msg.user .chat-bubble{
+  background:#d9fdd3;
+  border-radius:8px 0 8px 8px;
+}
+
+.test-ai-card .chat-msg.ai .chat-bubble{
+  background:#ffffff;
+  border-radius:0 8px 8px 8px;
+}
+
+.test-ai-card .chat-msg.error .chat-bubble{
+  color:#8a1f1f;
+  background:#ffe8e8;
+}
+
+.test-ai-card .chat-text{
+  overflow-wrap:anywhere;
+}
+
+.test-ai-media-list{
+  display:grid;
+  gap:7px;
+  margin-top:8px;
+}
+
+.test-ai-media-item{
+  overflow:hidden;
+  max-width:320px;
+  border-radius:8px;
+  background:#f5f6f6;
+}
+
+.test-ai-media-item .media-thumb{
+  display:block;
+  width:100%;
+  max-width:100%;
+  max-height:260px;
+  object-fit:cover;
+  margin:0;
+  border-radius:8px 8px 0 0;
+}
+
+.test-ai-media-caption{
+  padding:6px 8px;
+  color:rgba(17,27,33,.72);
+  font-size:11px;
+  line-height:1.3;
+  white-space:normal;
+}
+
+.test-ai-card .chat-time{
+  position:absolute;
+  right:8px;
+  bottom:4px;
+  color:rgba(17,27,33,.52);
+  font-size:10px;
+  line-height:1;
+}
+
+.test-ai-card .chat-agent{
+  max-width:min(76%, 680px);
+  margin-top:3px;
+  color:rgba(233,237,239,.62);
+  font-size:10px;
+}
+
+.test-ai-card .typing-bubble{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  width:auto;
+  min-width:52px;
+  padding:10px 12px;
+}
+
+.test-ai-card .typing-bubble span{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#8696a0;
+  animation:testAiTyping 1s ease-in-out infinite;
+}
+
+.test-ai-card .typing-bubble span:nth-child(2){
+  animation-delay:.14s;
+}
+
+.test-ai-card .typing-bubble span:nth-child(3){
+  animation-delay:.28s;
+}
+
+@keyframes testAiTyping{
+  0%,80%,100%{opacity:.35;transform:translateY(0)}
+  40%{opacity:1;transform:translateY(-2px)}
+}
+
+.test-ai-card .chat-input-row{
+  align-items:center;
+  flex-direction:row;
+  gap:8px;
+  margin-top:0;
+  padding:10px;
+  border:1px solid rgba(12,120,96,.38);
+  border-top:0;
+  border-radius:0 0 8px 8px;
+  background:#0b141a;
+}
+
+.test-ai-card .chat-input-row .input{
+  height:42px;
+  border-radius:999px;
+  color:#e9edef;
+  background:#202c33;
+  border-color:transparent;
+}
+
+.test-ai-card .chat-input-row .input::placeholder{
+  color:#8696a0;
+}
+
+.test-ai-card .chat-input-row .btn{
+  width:auto;
+  min-width:84px;
+  height:42px;
+  border-radius:999px;
+  background:#00a884;
+  color:#071b16;
+}
+
 .prompt-card{
   overflow:hidden;
   margin-bottom:16px;
@@ -2190,6 +2413,17 @@ select:focus-visible{
   border-color:rgba(255,181,71,.24);
 }
 
+.wa-overview.connecting{
+  border-color:rgba(255,181,71,.28);
+}
+
+.wa-overview.connecting .wa-status-icon{
+  color:var(--amber);
+  background:var(--amber-dim);
+  border-color:rgba(255,181,71,.28);
+  animation:waConnectingGlow 1.3s ease-in-out infinite;
+}
+
 .wa-overview.waiting .wa-status-icon{
   color:var(--amber);
   background:var(--amber-dim);
@@ -2234,6 +2468,11 @@ select:focus-visible{
 }
 
 .wa-overview.waiting .wa-badge{
+  color:var(--amber);
+  background:var(--amber-dim);
+}
+
+.wa-overview.connecting .wa-badge{
   color:var(--amber);
   background:var(--amber-dim);
 }
@@ -2374,6 +2613,52 @@ select:focus-visible{
   font-size:12px;
   color:var(--text2);
   line-height:1.5;
+}
+
+.wa-connecting-panel{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.wa-connecting-loader{
+  width:54px;
+  height:54px;
+  flex:0 0 54px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  border-radius:16px;
+  color:var(--amber);
+  background:var(--amber-dim);
+  border:1px solid rgba(255,181,71,.24);
+}
+
+.wa-connecting-loader span{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:currentColor;
+  animation:waConnectingDots .9s ease-in-out infinite;
+}
+
+.wa-connecting-loader span:nth-child(2){
+  animation-delay:.12s;
+}
+
+.wa-connecting-loader span:nth-child(3){
+  animation-delay:.24s;
+}
+
+@keyframes waConnectingDots{
+  0%,80%,100%{transform:scale(.72);opacity:.45}
+  40%{transform:scale(1);opacity:1}
+}
+
+@keyframes waConnectingGlow{
+  0%,100%{box-shadow:0 0 0 rgba(255,181,71,0)}
+  50%{box-shadow:0 0 0 7px rgba(255,181,71,.12)}
 }
 
 .wa-panel[hidden]{
@@ -3288,3 +3573,572 @@ body{
 .ai-confirm-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
 @media (max-width:1180px){.ai-system-tabs{grid-template-columns:repeat(4,minmax(140px,1fr));}.memory-layout,.learning-bank-layout,.skill-system-layout,.review-approval-layout,.scoring-layout,.human-handoff-layout,.human-chat-layout{grid-template-columns:1fr;}.memory-detail-body{grid-template-columns:1fr;}.memory-customer-list,.learning-bank-list,.skill-system-list,.review-approval-list,.scoring-list,.human-handoff-list,.human-chat-ticket-list{height:360px;}.human-chat-side-card{order:3;}}
 @media (max-width:760px){.ai-system-tabs{display:flex;overflow-x:auto;}.ai-system-tab{min-width:150px;}.ai-overview-toolbar,.memory-toolbar,.learning-bank-toolbar,.skill-system-toolbar,.review-approval-toolbar,.human-handoff-toolbar,.human-chat-toolbar{flex-direction:column;align-items:stretch;}.memory-search,.learning-bank-search,.skill-system-search,.review-approval-search,.human-handoff-search,.human-chat-search{min-width:0;}.memory-form-grid,.learning-form-grid,.skill-form-grid,.review-readonly-grid,.human-handoff-form-grid,.scoring-score-grid{grid-template-columns:1fr;}.ai-overview-workspace{grid-template-columns:1fr;}.human-chat-compose{grid-template-columns:1fr;}.ai-confirm-dialog{grid-template-columns:1fr;}.ai-confirm-actions{flex-direction:column-reverse;}}
+
+/* ================================================================
+   FINAL RESPONSIVE HARDENING
+   Keep every dashboard section usable from small phones to desktops.
+================================================================ */
+
+html,
+body,
+.layout,
+.main,
+.content,
+.section,
+.sidebar,
+.topbar,
+.wa-dashboard,
+.ai-system-shell{
+  max-width:100%;
+}
+
+body{
+  overscroll-behavior-y:none;
+}
+
+img,
+video,
+canvas,
+svg{
+  max-width:100%;
+}
+
+button,
+input,
+select,
+textarea{
+  max-width:100%;
+}
+
+.section,
+.card,
+.stat-card,
+.kb-hero,
+.product-item,
+.faq-card,
+.order-card,
+.log-card,
+.settings-section,
+.wa-overview,
+.wa-panel,
+.modal,
+.ai-confirm-dialog,
+.ai-overview-panel,
+.memory-list-card,
+.memory-detail-card,
+.learning-list-card,
+.learning-editor-card,
+.skill-list-card,
+.skill-editor-card,
+.review-list-card,
+.review-detail-card,
+.scoring-list-card,
+.scoring-detail-card,
+.human-handoff-list-card,
+.human-handoff-detail-card,
+.human-chat-list-card,
+.human-chat-room-card,
+.human-chat-side-card{
+  min-width:0;
+}
+
+.wa-status-title,
+.wa-status-desc,
+.wa-panel-title,
+.wa-panel-sub,
+.product-name,
+.product-summary,
+.faq-question,
+.faq-answer,
+.order-field-value,
+.log-message,
+.memory-history-item,
+.human-chat-bubble,
+.ai-overview-priority,
+.learning-bank-item,
+.skill-system-item,
+.review-approval-item,
+.scoring-item,
+.human-handoff-item,
+.human-chat-ticket-item{
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+
+.table-wrap,
+.orders-table-wrap,
+.logs-table-wrap,
+.responsive-scroll,
+.admin-table-wrap{
+  width:100%;
+  max-width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+table{
+  max-width:100%;
+}
+
+.btn{
+  min-height:38px;
+  white-space:normal;
+}
+
+.btn-sm,
+.btn-xs{
+  min-height:34px;
+}
+
+.input,
+.textarea,
+.select{
+  width:100%;
+}
+
+.topbar-title-wrap{
+  min-width:0;
+}
+
+.topbar-actions{
+  min-width:0;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.page-title,
+.page-sub{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.modal-overlay,
+.ai-confirm-overlay{
+  padding-left:max(14px, env(safe-area-inset-left));
+  padding-right:max(14px, env(safe-area-inset-right));
+}
+
+.modal,
+.ai-confirm-dialog{
+  max-height:calc(100dvh - 32px);
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.modal-footer,
+.ai-confirm-actions,
+.order-actions,
+.memory-actions,
+.learning-actions,
+.skill-actions,
+.review-actions,
+.handoff-actions,
+.human-chat-room-actions{
+  flex-wrap:wrap;
+}
+
+.wa-qr-box{
+  overflow:hidden;
+}
+
+.wa-qr-box canvas,
+.wa-qr-box img,
+#qr-canvas,
+#qr-canvas canvas,
+#qr-canvas img{
+  max-width:100%;
+  height:auto !important;
+}
+
+.memory-customer-list,
+.learning-bank-list,
+.skill-system-list,
+.review-approval-list,
+.scoring-list,
+.human-handoff-list,
+.human-chat-ticket-list,
+.memory-history-list,
+.human-chat-history{
+  max-height:min(520px, 62dvh);
+}
+
+@media (max-width:1180px){
+  .content{
+    padding:20px;
+  }
+
+  .stats-grid,
+  .grid-2,
+  .order-grid,
+  .wa-info-grid,
+  .ai-overview-grid,
+  .memory-stats,
+  .learning-bank-stats,
+  .skill-system-stats,
+  .review-approval-stats,
+  .scoring-stats,
+  .human-handoff-stats{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .order-header,
+  .log-header{
+    align-items:flex-start;
+    gap:10px;
+  }
+}
+
+@media (max-width:900px){
+  html,
+  body{
+    height:100%;
+    min-height:100%;
+    overflow-x:hidden;
+    overflow-y:hidden;
+  }
+
+  .layout{
+    height:100dvh;
+    min-height:100dvh;
+    overflow:hidden;
+  }
+
+  .main{
+    height:100dvh;
+    min-height:100dvh;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .content{
+    width:100%;
+    padding:16px;
+  }
+
+  .topbar{
+    position:sticky;
+    top:0;
+    min-height:60px;
+  }
+
+  .topbar-actions{
+    display:none;
+  }
+
+  .kb-hero,
+  .wa-overview{
+    border-radius:14px;
+  }
+
+  .wa-dashboard{
+    gap:12px;
+  }
+
+  #wa-status-big{
+    order:1;
+  }
+
+  #qr-section,
+  #wa-connecting-section{
+    order:2;
+  }
+
+  .wa-actions{
+    order:3;
+  }
+
+  .wa-info-grid{
+    order:4;
+  }
+
+  .wa-overview-head,
+  .wa-panel-head,
+  .order-header,
+  .log-header,
+  .ai-overview-toolbar,
+  .memory-toolbar,
+  .learning-bank-toolbar,
+  .skill-system-toolbar,
+  .review-approval-toolbar,
+  .human-handoff-toolbar,
+  .human-chat-toolbar,
+  .human-chat-room-head{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .wa-check,
+  .human-chat-room-actions{
+    text-align:left;
+    justify-content:flex-start;
+  }
+
+  .wa-actions,
+  .modal-footer,
+  .ai-confirm-actions{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:stretch;
+  }
+
+  .wa-actions .btn,
+  .modal-footer .btn,
+  .ai-confirm-actions .btn{
+    width:100%;
+  }
+
+  .wa-actions .btn-danger,
+  .modal-footer .btn-primary,
+  .ai-confirm-actions .btn-danger,
+  .ai-confirm-actions .btn-primary{
+    grid-column:1/-1;
+  }
+
+  .wa-actions-spacer,
+  .wa-help{
+    display:none;
+  }
+
+  .wa-qr-layout,
+  .memory-layout,
+  .memory-detail-body,
+  .learning-bank-layout,
+  .skill-system-layout,
+  .review-approval-layout,
+  .scoring-layout,
+  .human-handoff-layout,
+  .human-chat-layout,
+  .ai-overview-workspace{
+    grid-template-columns:1fr;
+  }
+
+  .human-chat-side-card{
+    order:3;
+  }
+
+  .memory-search,
+  .learning-bank-search,
+  .skill-system-search,
+  .review-approval-search,
+  .human-handoff-search,
+  .human-chat-search{
+    width:100%;
+    min-width:0;
+  }
+}
+
+@media (max-width:640px){
+  .content{
+    padding:12px;
+  }
+
+  .topbar{
+    padding:10px 12px;
+  }
+
+  .page-title{
+    font-size:17px;
+  }
+
+  .page-sub{
+    display:none;
+  }
+
+  .card,
+  .stat-card,
+  .settings-section,
+  .wa-panel,
+  .wa-overview,
+  .product-item.kb-card,
+  .faq-card,
+  .order-card,
+  .log-card,
+  .ai-overview-panel,
+  .memory-list-card,
+  .memory-detail-card,
+  .learning-list-card,
+  .learning-editor-card,
+  .skill-list-card,
+  .skill-editor-card,
+  .review-list-card,
+  .review-detail-card,
+  .scoring-list-card,
+  .scoring-detail-card,
+  .human-handoff-list-card,
+  .human-handoff-detail-card,
+  .human-chat-list-card,
+  .human-chat-room-card,
+  .human-chat-side-card{
+    padding:14px;
+    border-radius:10px;
+  }
+
+  .stats-grid,
+  .grid-2,
+  .order-grid,
+  .wa-info-grid,
+  .ai-overview-grid,
+  .memory-stats,
+  .learning-bank-stats,
+  .skill-system-stats,
+  .review-approval-stats,
+  .scoring-stats,
+  .human-handoff-stats,
+  .memory-form-grid,
+  .learning-form-grid,
+  .skill-form-grid,
+  .review-readonly-grid,
+  .human-handoff-form-grid,
+  .human-chat-detail-grid,
+  .scoring-score-grid,
+  .handoff-settings-grid,
+  .ai-overview-health{
+    grid-template-columns:1fr;
+  }
+
+  .wa-status-main{
+    align-items:center;
+    gap:11px;
+  }
+
+  .wa-status-icon,
+  .wa-connecting-loader{
+    width:46px;
+    height:46px;
+    flex-basis:46px;
+    border-radius:12px;
+  }
+
+  .wa-status-title,
+  .ai-system-panel h3,
+  .ai-overview-toolbar h3{
+    font-size:18px;
+  }
+
+  .wa-actions,
+  .modal-footer,
+  .ai-confirm-actions,
+  .human-chat-compose{
+    grid-template-columns:1fr;
+  }
+
+  .wa-actions .btn-danger,
+  .modal-footer .btn-primary,
+  .ai-confirm-actions .btn-danger,
+  .ai-confirm-actions .btn-primary{
+    grid-column:auto;
+  }
+
+  .order-actions .btn,
+  .memory-actions .btn,
+  .learning-actions .btn,
+  .skill-actions .btn,
+  .review-actions .btn,
+  .handoff-actions .btn,
+  .human-chat-room-actions .btn{
+    flex:1 1 100%;
+  }
+
+  .ai-system-tabs{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding-bottom:6px;
+    scroll-snap-type:x proximity;
+  }
+
+  .ai-system-tab{
+    flex:0 0 auto;
+    min-width:138px;
+    min-height:46px;
+    padding:10px 11px;
+    scroll-snap-align:start;
+  }
+
+  .memory-customer-list,
+  .learning-bank-list,
+  .skill-system-list,
+  .review-approval-list,
+  .scoring-list,
+  .human-handoff-list,
+  .human-chat-ticket-list{
+    height:auto;
+    max-height:44dvh;
+  }
+
+  .memory-history-list,
+  .human-chat-history{
+    height:auto;
+    max-height:48dvh;
+  }
+}
+
+@media (max-width:420px){
+  .content{
+    padding:10px;
+  }
+
+  .mobile-menu-btn{
+    width:36px;
+    height:36px;
+    flex:0 0 36px;
+  }
+
+  .topbar{
+    gap:10px;
+  }
+
+  .wa-panel-head .badge{
+    width:max-content;
+    max-width:100%;
+  }
+
+  .wa-connecting-panel{
+    align-items:flex-start;
+    gap:12px;
+  }
+
+  .btn{
+    min-height:42px;
+    padding-left:12px;
+    padding-right:12px;
+  }
+
+  .modal,
+  .ai-confirm-dialog{
+    width:100%;
+    padding:14px;
+  }
+
+  .ai-confirm-overlay{
+    align-items:flex-end;
+    padding-top:18px;
+    padding-bottom:max(14px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width:360px){
+  .content{
+    padding:8px;
+  }
+
+  .wa-status-icon,
+  .wa-connecting-loader{
+    width:42px;
+    height:42px;
+    flex-basis:42px;
+    font-size:20px;
+  }
+
+  .wa-status-title{
+    font-size:17px;
+  }
+
+  .wa-status-desc,
+  .wa-panel-sub,
+  .wa-step-text{
+    font-size:12px;
+  }
+}

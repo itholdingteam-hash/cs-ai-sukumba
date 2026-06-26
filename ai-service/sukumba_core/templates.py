@@ -9,21 +9,15 @@ import re
 
 
 def greeting(raw_text, greeting_label):
+    greeting_label = (greeting_label or "Halo").strip()
+    if greeting_label.lower() == "halo":
+        opening = "Halo Kak, dengan CS Syifa ya."
+    else:
+        opening = f"{greeting_label} Kak, dengan CS Syifa ya."
+
     return (
-        "Hallo kak, salam kenal ini dengan CS SYIFA☺️\n\n"
-        "Kaka bisa otomatis mendapatkan PROMO kami jika melengkapi data dibawah ini😍\n\n"
-        "Nama : \n"
-        "Alamat Jalan :\n"
-        "Patokan :\n"
-        "RT :\n"
-        "RW : \n"
-        "Desa/kelurahan: \n"
-        "Kecamatan : \n"
-        "Kab/Kota :\n"
-        "Prov :\n\n"
-        "No. Hp :\n"
-        "Pembayaran : COD/TRF\n\n\n"
-        "✅ Cukup klik iklan 1 kali saja yaa kak, agar tidak terjadi eror/double data"
+        f"{opening}\n\n"
+        "Kakak mau tanya promo Sukumba, info produk, atau konsultasi keluhan dulu?"
     )
 
 
@@ -75,6 +69,38 @@ def aturan_minum():
         "Pemulihan: 2 x 2 sendok makan per hari, sesudah makan.\n\n"
         "Penjagaan: 1 x 2 sendok makan per hari.\n\n"
         "Jika sedang minum obat dokter, beri jeda 1-2 jam ya Kak."
+    )
+
+
+def minimum_age():
+    return "Mulai dari umur 12 tahun, Kak."
+
+
+def manfaat_sukumba():
+    return (
+        "Boleh Kak, ini manfaat SUKUMBA untuk kesehatan sendi ya.\n\n"
+        "- Membantu mendukung kesehatan tulang dan sendi\n"
+        "- Membantu tubuh terasa lebih bugar untuk aktivitas harian\n"
+        "- Membantu support pemulihan tubuh setelah lelah beraktivitas\n"
+        "- Membantu menjaga stamina dan vitalitas secara natural\n\n"
+    )
+
+
+def side_effects():
+    return (
+        "Untuk produk kami aman dan sudah BPOM, Kak.\n\n"
+        "Secara umum susu kuda aman dan jarang memicu alergi.\n\n"
+        "Namun, karena ada kandungan gula alami/laktosa dan karbohidrat, penderita diabetes "
+        "atau Kakak yang sedang membatasi asupan kalori disarankan untuk mengatur porsinya ya."
+    )
+
+
+def sukumba_difference():
+    return (
+        "SUKUMBA beda dari yang lain karena:\n\n"
+        "- Teksturnya lebih ringan\n"
+        "- Tidak bau prengus\n"
+        "- Kombinasi rempahnya berasa"
     )
 
 
@@ -227,4 +253,28 @@ def testimoni_offer():
     return (
         "Boleh Kak, saya kirimkan testimoni customer SUKUMBA ya.\n\n"
         "Kalau Kakak mau, setelah itu saya bantu jelaskan manfaat atau aturan minumnya."
+    )
+
+
+def ongkir_calculated(destination, shipping_cost_label, estimated_days=''):
+    """Template ketika ongkir berhasil dihitung dari alamat tujuan."""
+    estimasi = f"\nEstimasi sampai: {estimated_days}" if estimated_days else ""
+    return (
+        f"Ongkir ke {destination} via JNE REG: {shipping_cost_label}{estimasi}\n\n"
+        "\U0001f95b 1 box Rp 99.000 + ongkir = total dibayar saat paket sampai\n"
+        "\U0001f95b 2 box Rp 159.000 + ongkir = lebih hemat untuk konsumsi rutin\n\n"
+        "Mau ambil paket yang mana, Kak? Nanti CS Syifa bantu proses ordernya \U0001f60a"
+    )
+
+
+def ongkir_not_found(destination=''):
+    """Template ketika ongkir untuk wilayah tertentu belum tersedia."""
+    loc = f" ke {destination}" if destination else ""
+    return (
+        f"Mohon maaf Kak, tarif ongkir{loc} belum tersedia di sistem CS Syifa.\n\n"
+        "Supaya bisa CS Syifa bantu cek manual, boleh kirim data berikut ya:\n"
+        "- Kecamatan\n"
+        "- Kabupaten/Kota\n"
+        "- Provinsi\n\n"
+        "Nanti CS Syifa konfirmasi total produk + ongkirnya."
     )

@@ -677,6 +677,22 @@ def template_promo_sukumba():
     return template_service.promo_sukumba()
 
 
+def template_manfaat_sukumba():
+    return template_service.manfaat_sukumba()
+
+
+def template_minimum_age():
+    return template_service.minimum_age()
+
+
+def template_side_effects():
+    return template_service.side_effects()
+
+
+def template_sukumba_difference():
+    return template_service.sukumba_difference()
+
+
 def template_cara_konsumsi():
     return template_service.cara_konsumsi()
 
@@ -782,6 +798,10 @@ def syifa_template_router(raw_text, history=None, profile=None):
         template_ongkir_info=template_ongkir_info,
         template_kurir_info=template_kurir_info,
         template_promo_sukumba=template_promo_sukumba,
+        template_manfaat_sukumba=template_manfaat_sukumba,
+        template_minimum_age=template_minimum_age,
+        template_side_effects=template_side_effects,
+        template_sukumba_difference=template_sukumba_difference,
         template_aturan_minum=template_aturan_minum,
         template_cara_konsumsi=template_cara_konsumsi,
         template_ask_ever_consumed=template_ask_ever_consumed,
@@ -1234,6 +1254,46 @@ def clean_panel_prompt(prompt):
     text = text.replace('[Nama Perusahaan/Brand]', 'Sukumba')
     return text.strip()
 
+def contextual_short_reply(raw_text, history=None, profile=None):
+    """Lanjutkan balasan pendek seperti 'oke/iya/lanjut' berdasarkan konteks terakhir CS."""
+    lower = compact_user_text(raw_text)
+
+    if not (is_short_acknowledgement(lower) or is_followup_reaction(lower)):
+        return None
+
+    last_ai = last_assistant_message(history or []).lower()
+    if not last_ai:
+        return None
+
+    state = build_conversation_state(profile, history or [])
+    question_id = state.get('last_question_id')
+
+    if question_id == 'ask_age_duration' or re.search(r'usia.*berapa.*berapa\s+lama|berapa\s+lama.*usia', last_ai):
+        return "Siap Kak. Boleh info usia Kakak dan keluhannya sudah berapa lama ya?"
+
+    if question_id == 'ask_risk_factors' or re.search(r'diabetes|tensi\s+tinggi|jantung|obat\s+rutin', last_ai):
+        return "Siap Kak. Ada riwayat diabetes, tensi tinggi, jantung, atau obat rutin dari dokter?"
+
+    if question_id == 'ask_lifestyle' or re.search(r'pola\s+tidur|merokok|rokok|stres|stress', last_ai):
+        return "Siap Kak. Pola tidur Kakak gimana, merokok atau tidak, dan akhir-akhir ini banyak stres?"
+
+    if re.search(r'order|pemesanan|form\s+order|lengkapi\s+data', last_ai):
+        return "Siap Kak. Kalau mau lanjut order, boleh isi form data yang tadi ya. Nanti CS Syifa bantu cek paket, alamat, dan totalnya."
+
+    if question_id == 'ask_package_choice' or re.search(r'ambil\s+paket|paket\s+yang\s+mana|1\s+box|2\s+box|pilihkan\s+paket', last_ai):
+        return "Boleh Kak. Untuk awal biasanya bisa mulai dari 1 box dulu, atau 2 box kalau mau lebih hemat untuk konsumsi rutin. Kakak mau pilih yang mana?"
+
+    if re.search(r'harga|promo|rp\s*99|rp\s*159', last_ai):
+        return "Siap Kak. Promo saat ini 1 box Rp 99.000 dan 2 box Rp 159.000. Kakak mau saya bantu pilihkan paket sesuai kebutuhan dulu?"
+
+    if re.search(r'aturan\s+minum|cara\s+konsumsi|2x\s+sehari|sesudah\s+makan', last_ai):
+        return "Iya Kak, diminum rutin sesudah makan. Kalau Kakak punya obat dokter, kasih jeda 1-2 jam supaya lebih aman."
+
+    if is_followup_reaction(lower):
+        return "Iya Kak. Bagian mana yang mau saya jelaskan lagi, produk Sukumba atau konsultasi keluhannya?"
+
+    return None
+
 def deterministic_safe_reply(raw_text, intent='conversation', profile=None, history=None):
     if intent == 'male_health':
         consult_reply = deterministic_male_consult_reply(raw_text, history, profile)
@@ -1244,6 +1304,10 @@ def deterministic_safe_reply(raw_text, intent='conversation', profile=None, hist
     lower = html.unescape(str(raw_text or '')).lower().strip()
     if is_test_probe(lower):
         return "Siap Kak, AI CS Sukumba aktif. Mau cek info produk atau konsultasi dulu?"
+    contextual_reply = contextual_short_reply(raw_text, history, profile)
+    if contextual_reply:
+        return contextual_reply
+
     if is_short_acknowledgement(lower):
         return "Siap Kak. Mau lanjut info produk Sukumba atau konsultasi dulu?"
     if is_followup_reaction(lower):
@@ -1707,7 +1771,7 @@ def orchestrator(msg, history, cfg, profile=None, knowledge_context=''):
     if intent == 'conversation' and is_test_probe(msg):
         return deterministic_safe_reply(msg, intent, profile, history), intent, 'test_probe_agent', {}
     if intent == 'conversation' and (is_short_acknowledgement(msg) or is_followup_reaction(msg)):
-        return deterministic_safe_reply(msg, intent, profile, history), intent, 'deterministic_ack_agent', {}
+        return deterministic_safe_reply(msg, intent, profile, history), intent, 'contextual_ack_agent', {}
     if intent == 'order' and has_male_health_consultation_context(history, profile) and not (is_explicit_order_request(msg) or is_offer_acceptance(msg, history)):
         logger.info("Order intent held: continuing male_health consultation")
         intent = 'male_health'

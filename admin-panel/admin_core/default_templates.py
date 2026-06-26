@@ -4,24 +4,9 @@
 DEFAULT_CS_TEMPLATES = [
     {
         'title': 'Greeting',
-        'content': """Hallo kak, salam kenal ini dengan CS SYIFA☺️
+        'content': """Halo Kak, dengan CS Syifa ya.
 
-Kaka bisa otomatis mendapatkan PROMO kami jika melengkapi data dibawah ini😍
-
-Nama : 
-Alamat Jalan:
-Patokan:
-RT:
-RW: 
-Desa/kelurahan: 
-Kecamatan: 
-Kab/Kota:
-Prov:
-
-No. Hp:
-Pembayaran: COD/TRF
-
-✅ Cukup klik iklan 1 kali saja yaa kak, agar tidak terjadi eror/double data"""
+Kakak mau tanya promo Sukumba, info produk, atau konsultasi keluhan dulu?"""
     },
     {
         'title': 'Tanya Keluhan',
@@ -194,6 +179,43 @@ Karena ada kandungan gula alami/laktosa dan karbohidrat, porsinya perlu diatur d
         'content': """Boleh Kak, saya kirimkan testimoni customer SUKUMBA ya.
 
 Kalau Kakak mau, setelah itu saya bantu jelaskan manfaat atau aturan minumnya."""
+    },
+]
+
+
+DEFAULT_FAQS = [
+    {
+        'question': 'Umur berapa diperbolehkan minum Sukumba?',
+        'answer': 'Mulai dari umur 12 tahun.',
+        'image_url': '',
+    },
+    {
+        'question': 'Apakah ada efek sampingnya?',
+        'answer': (
+            'Untuk produk kami aman dan sudah BPOM.\n\n'
+            'Secara umum susu kuda aman dan jarang memicu alergi.\n\n'
+            'Namun, karena kandungan gula alami/laktosa dan karbohidratnya yang cukup tinggi, '
+            'penderita diabetes atau mereka yang sedang membatasi asupan kalori disarankan untuk mengatur porsinya.'
+        ),
+        'image_url': '',
+    },
+    {
+        'question': 'Kenapa SUKUMBA beda dari yang lain?',
+        'answer': (
+            '- Teksturnya lebih ringan\n'
+            '- Tidak bau prengus\n'
+            '- Kombinasi rempahnya berasa'
+        ),
+        'image_url': '',
+    },
+    {
+        'question': 'Apa manfaat Sukumba untuk kesehatan sendi?',
+        'answer': (
+            'SUKUMBA dapat menjadi ikhtiar untuk membantu meredakan peradangan sendi, '
+            'menguatkan tulang dan sendi, melenturkan otot dan sendi, membantu '
+            'mengurangi rasa nyeri, serta meredakan pegal linu.'
+        ),
+        'image_url': '/static/uploads/manfaat-sukumba-sendi.jpeg',
     },
 ]
 

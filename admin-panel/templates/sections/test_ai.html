@@ -1,6 +1,6 @@
       <!-- TEST AI -->
       <div class="section" id="section-test">
-        <div class="card">
+        <div class="card test-ai-card">
           <div class="card-header">
             <div><div class="card-title">Test AI</div><div class="card-sub">Simulasi percakapan multi-agent</div></div>
             <div style="display:flex;gap:8px;align-items:center">
@@ -8,7 +8,16 @@
               <button class="btn btn-ghost btn-sm" onclick="clearChat()">Bersihkan</button>
             </div>
           </div>
-          <div class="chat-box" id="chat"><div style="text-align:center;color:var(--text3);font-size:12px;margin:auto">Mulai percakapan...</div></div>
+          <div class="test-ai-phone">
+            <div class="test-ai-wa-head">
+              <div class="test-ai-avatar">CS</div>
+              <div>
+                <strong>CS Syifa</strong>
+                <span>online</span>
+              </div>
+            </div>
+            <div class="chat-box test-ai-chat" id="chat"><div class="test-ai-empty">Mulai percakapan...</div></div>
+          </div>
           <div class="chat-input-row">
             <input class="input" id="msg" placeholder="Ketik pesan..." onkeypress="if(event.key==='Enter')sendMsg()">
             <button class="btn btn-primary" onclick="sendMsg()">Kirim</button>

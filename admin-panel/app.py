@@ -12,7 +12,8 @@ Deploy:
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from werkzeug.utils import secure_filename
 import os
 import time
@@ -108,9 +109,34 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 STATIC_VERSION = str(int(time.time()))
 
+WIB = ZoneInfo("Asia/Jakarta")
+
+def now_wib_str():
+    return datetime.now(WIB).strftime("%Y-%m-%d %H:%M:%S")
+
+def format_wib(value):
+    if not value:
+        return "-"
+
+    text = str(value).strip()
+
+    try:
+        # Handle format: 2026-06-23 04:01:21
+        dt = datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S")
+
+        # Anggap waktu dari database masih UTC, lalu convert ke WIB
+        dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(WIB).strftime("%Y-%m-%d %H:%M:%S WIB")
+    except Exception:
+        return text
+
 @app.context_processor
 def inject_static_version():
-    return {'static_version': STATIC_VERSION}
+    return {
+        'static_version': STATIC_VERSION,
+        'format_wib': format_wib,
+    }
 
 limiter = Limiter(
     app=app,
@@ -152,7 +178,7 @@ def login():
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
             session['logged_in'] = True
-            session['login_time'] = datetime.now().isoformat()
+            session['login_time'] = datetime.now(WIB).isoformat()
             logger.info(f"Admin login dari {request.remote_addr}")
             return redirect(url_for('dashboard'))
         logger.warning(f"Login gagal dari {request.remote_addr}")

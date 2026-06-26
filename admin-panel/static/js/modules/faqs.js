@@ -30,6 +30,18 @@ async function loadFAQs(){
   }
 }
 
+function openFaqModal(){
+  document.getElementById("modal-faq-title").textContent = "Tambah FAQ";
+  document.getElementById("f-id").value = "";
+  document.getElementById("f-question").value = "";
+  document.getElementById("f-answer").value = "";
+  document.getElementById("f-image-url").value = "";
+  document.getElementById("f-preview").innerHTML = "";
+  var file = document.getElementById("f-file");
+  if (file) file.value = "";
+  openModal("modal-faq");
+}
+
 function editFaqById(btn){
   var f = btn.closest(".faq-card")._faq;
   document.getElementById("modal-faq-title").textContent = "Edit FAQ";

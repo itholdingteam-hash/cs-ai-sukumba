@@ -48,6 +48,23 @@ async function loadProducts(){
   }
 }
 
+function openProductModal(){
+  document.getElementById("modal-product-title").textContent = "Tambah Produk";
+  document.getElementById("p-id").value = "";
+  document.getElementById("p-name").value = "";
+  document.getElementById("p-price").value = "";
+  document.getElementById("p-speed").value = "";
+  document.getElementById("p-features").value = "";
+  document.getElementById("p-description").value = "";
+  document.getElementById("p-promo").value = "";
+  document.getElementById("p-target").value = "";
+  document.getElementById("p-image-url").value = "";
+  document.getElementById("p-preview").innerHTML = "";
+  var file = document.getElementById("p-file");
+  if (file) file.value = "";
+  openModal("modal-product");
+}
+
 function editProductById(btn){
   var p = btn.closest(".product-item")._product;
   document.getElementById("modal-product-title").textContent = "Edit Produk";

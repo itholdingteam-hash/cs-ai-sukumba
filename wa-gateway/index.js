@@ -61,6 +61,7 @@ const AI_URL = (process.env.AI_URL || 'http://ai-service-docker:5000').replace(/
 const MAX_HISTORY = parseInt(process.env.MAX_HISTORY) || 12;
 const ADMIN_WA = process.env.ADMIN_WA || '';
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+const BENEFIT_IMAGE_URL = process.env.BENEFIT_IMAGE_URL || '/static/uploads/manfaat-sukumba-sendi.jpeg';
 
 // Axios defaults
 const axiosConfig = {
@@ -441,6 +442,86 @@ function replyJidsFromMessage(msg, senderNumber) {
   ]);
 }
 
+function unwrapMessageContent(message) {
+  let content = message || {};
+  const seen = new Set();
+  for (let i = 0; i < 8; i++) {
+    if (!content || typeof content !== 'object' || seen.has(content)) break;
+    seen.add(content);
+    const next =
+      content.ephemeralMessage?.message ||
+      content.viewOnceMessage?.message ||
+      content.viewOnceMessageV2?.message ||
+      content.viewOnceMessageV2Extension?.message ||
+      content.documentWithCaptionMessage?.message ||
+      content.editedMessage?.message ||
+      content.protocolMessage?.editedMessage;
+    if (!next || next === content) break;
+    content = next;
+  }
+  return content || {};
+}
+
+function firstTextCandidate(values) {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function parseNativeFlowText(paramsJson) {
+  if (!paramsJson || typeof paramsJson !== 'string') return '';
+  try {
+    const data = JSON.parse(paramsJson);
+    return firstTextCandidate([
+      data.title,
+      data.text,
+      data.name,
+      data.id,
+      data.button_id,
+      data.selected_id
+    ]);
+  } catch (e) {
+    return paramsJson.trim();
+  }
+}
+
+function extractMessageText(message) {
+  const content = unwrapMessageContent(message);
+  const listReply = content.listResponseMessage?.singleSelectReply || {};
+  const nativeFlow = content.interactiveResponseMessage?.nativeFlowResponseMessage || {};
+  return firstTextCandidate([
+    content.conversation,
+    content.extendedTextMessage?.text,
+    content.imageMessage?.caption,
+    content.videoMessage?.caption,
+    content.documentMessage?.caption,
+    content.buttonsResponseMessage?.selectedDisplayText,
+    content.buttonsResponseMessage?.selectedButtonId,
+    content.templateButtonReplyMessage?.selectedDisplayText,
+    content.templateButtonReplyMessage?.selectedId,
+    content.listResponseMessage?.title,
+    content.listResponseMessage?.description,
+    listReply.selectedRowId,
+    parseNativeFlowText(nativeFlow.paramsJson)
+  ]);
+}
+
+function messageContentTypes(message) {
+  const wrapped = Object.keys(message || {}).filter(key => key !== 'messageContextInfo');
+  const unwrapped = Object.keys(unwrapMessageContent(message)).filter(key => key !== 'messageContextInfo');
+  const seen = new Set();
+  const merged = [];
+  for (const key of [...wrapped, ...unwrapped]) {
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(key);
+  }
+  return merged.join(',') || '-';
+}
+
 function normalizePhoneNumber(text) {
   const digits = (text || '').replace(/\D/g, '');
   if (digits.length < 10 || digits.length > 15) return '';
@@ -526,6 +607,9 @@ function parseStructuredOrderForm(text) {
     pembayaran: 'payment',
     tfcod: 'payment',
     codtrf: 'payment',
+    paket: 'package',
+    paket1box2box: 'package',
+    pilihanpaket: 'package',
     keluhan: 'complaint',
     keluhansakit: 'complaint',
     keluhansakityangdirasakan: 'complaint',
@@ -576,13 +660,60 @@ function inferOrderPackage(fields, prefill) {
   return { quantity: prefill.quantity === '2' ? '2' : '1', price: prefill.quantity === '2' ? 'Rp 159.000' : 'Rp 99.000' };
 }
 
-function buildOrderProductAndTotal(fields, prefill, pay) {
+function parseRupiah(value) {
+  const digits = String(value || '').replace(/[^\d]/g, '');
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+function formatRupiah(value) {
+  const amount = parseInt(value || 0, 10);
+  return `Rp ${amount.toLocaleString('id-ID')}`;
+}
+
+function buildOrderProductAndSubtotal(fields, prefill) {
   const selected = inferOrderPackage(fields, prefill);
   const product = prefill.product || `SUKUMBA ${selected.quantity} box - ${selected.price}`;
-  let total = prefill.total || selected.price;
-  if (pay === 'COD') total = selected.quantity === '2' ? 'Rp 169.000' : 'Rp 109.000';
-  if (pay === 'TRF') total = selected.quantity === '2' ? 'Rp 169.001' : 'Rp 109.001';
-  return { product, quantity: selected.quantity, total };
+  const subtotal = parseRupiah(prefill.subtotal || selected.price);
+  return { product, quantity: selected.quantity, subtotal, subtotalLabel: formatRupiah(subtotal) };
+}
+
+async function calculateOrderShipping(fields, subtotal, quantity) {
+  try {
+    const res = await axios.post(`${ADMIN_URL}/api/calculate-shipping`, {
+      province: fields.province || '',
+      city: fields.city || '',
+      district: fields.district || '',
+      courier: 'JNE',
+      service: 'REG',
+      subtotal,
+      weight: Math.max(1, parseInt(quantity || '1', 10)) * 500,
+    }, axiosConfig);
+
+    if (res.data && res.data.success) {
+      return {
+        found: true,
+        source: res.data.source || (res.data.rate && res.data.rate.source) || 'shipping_rates',
+        shippingCost: parseInt(res.data.shipping_cost || 0, 10),
+        shippingLabel: res.data.shipping_cost_label || formatRupiah(res.data.shipping_cost || 0),
+        total: parseInt(res.data.total || (subtotal + parseInt(res.data.shipping_cost || 0, 10)), 10),
+        totalLabel: res.data.total_label || formatRupiah(subtotal + parseInt(res.data.shipping_cost || 0, 10)),
+        estimatedDays: (res.data.rate && res.data.rate.estimated_days) || '',
+      };
+    }
+  } catch (e) {
+    const status = e.response && e.response.status;
+    const error = e.response && e.response.data && (e.response.data.error || e.response.data.message);
+    log('WARN', `Ongkir tidak ditemukan untuk ${fields.district}, ${fields.city}, ${fields.province}: ${error || status || e.message}`);
+  }
+
+  return {
+    found: false,
+    shippingCost: 0,
+    shippingLabel: 'menunggu cek admin',
+    total: subtotal,
+    totalLabel: `${formatRupiah(subtotal)} + ongkir`,
+    estimatedDays: '',
+  };
 }
 
 function buildOrderAddress(fields) {
@@ -637,9 +768,15 @@ async function handleStructuredOrderForm(from, text, sock, senderNumber) {
   if (!prefill.payment) prefill.payment = pay;
   const address = buildOrderAddress(fields);
   const phone = normalizePhoneNumber(fields.phone);
-  const { product, quantity, total } = buildOrderProductAndTotal(fields, prefill, pay);
+  const { product, quantity, subtotal, subtotalLabel } = buildOrderProductAndSubtotal(fields, prefill);
+  const shipping = await calculateOrderShipping(fields, subtotal, quantity);
+  const total = shipping.totalLabel;
   const notes = [
     `Pembayaran: ${pay}`,
+    `Subtotal produk: ${subtotalLabel}`,
+    `Ongkir: ${shipping.shippingLabel}`,
+    shipping.estimatedDays ? `Estimasi: ${shipping.estimatedDays}` : '',
+    shipping.found ? '' : 'Catatan ongkir: tarif wilayah belum tersedia, perlu dicek admin.',
     fields.age ? `Usia: ${fields.age}` : '',
     fields.complaint ? `Keluhan: ${fields.complaint}` : '',
   ].filter(Boolean).join('\n');
@@ -662,11 +799,14 @@ async function handleStructuredOrderForm(from, text, sock, senderNumber) {
   removeOrderSession(from);
   const orderId = res.data.order_id;
   const duplicateNote = res.data.duplicate ? '\n\nData ini sudah pernah masuk sebelumnya, jadi tidak dibuat dobel ya Kak.' : '';
+  const shippingLine = shipping.found
+    ? `Ongkir: ${shipping.shippingLabel}${shipping.estimatedDays ? `\nEstimasi: ${shipping.estimatedDays}` : ''}`
+    : 'Ongkir: menunggu cek admin karena tarif wilayah belum tersedia';
   await sendTextAndRemember(
     sock,
     from,
     senderNumber,
-    `Terima kasih Kak, data pesanan sudah CS Syifa terima.\n\nOrder ID: #${orderId}\nNama: ${fields.name.trim()}\nHP: ${phone}\nPembayaran: ${pay}\nProduk: ${product}\nTotal: ${total}\n\nTim kami akan segera proses pesanan Kakak.${duplicateNote}`
+    `Terima kasih Kak, data pesanan sudah CS Syifa terima.\n\nOrder ID: #${orderId}\nNama: ${fields.name.trim()}\nHP: ${phone}\nPembayaran: ${pay}\nProduk: ${product}\nSubtotal: ${subtotalLabel}\n${shippingLine}\nTotal: ${total}\n\nTim kami akan segera proses pesanan Kakak.${duplicateNote}`
   );
 
   try {
@@ -693,6 +833,243 @@ function isDirectCustomerJid(jid) {
   if (!jid || jid === 'status@broadcast') return false;
   if (jid.includes('@g.us') || jid.includes('@newsletter') || jid.includes('@broadcast')) return false;
   return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
+}
+
+// ------------------------------------------------------------------
+// 4B. SHIPPING COST CALCULATION HELPERS
+// ------------------------------------------------------------------
+
+/**
+ * Cek apakah percakapan terakhir AI sedang menanyakan alamat untuk cek ongkir.
+ * Juga cek apakah pesan user sebelumnya menanyakan ongkir.
+ */
+function detectShippingInquiryContext(history) {
+  if (!history || history.length < 1) return false;
+
+  // Cek 3 pesan terakhir (AI dan user) untuk context ongkir
+  const recentMessages = history.slice(-4);
+  const hasOngkirContext = recentMessages.some(h => {
+    const content = (h.content || '').toLowerCase();
+    if (h.role === 'assistant') {
+      // AI sebelumnya minta alamat/info ongkir
+      return /ongkir\s+menyesuaikan|cek\s+ongkir|kirim\s+(kecamatan|kabupaten|provinsi)|bantu\s+cek\s+total\s+produk\s*\+\s*ongkir|tarif\s+ongkir/i.test(content);
+    }
+    if (h.role === 'user') {
+      // User sebelumnya tanya tentang ongkir
+      return /\b(ongkir|ongkos\s+kirim|biaya\s+kirim|berapa\s+ongkir)\b/i.test(content);
+    }
+    return false;
+  });
+
+  return hasOngkirContext;
+}
+
+/**
+ * Parse alamat (kecamatan, kab/kota, provinsi) dari teks bebas customer.
+ * Customer mungkin kirim: "Semarang, Jawa Tengah" atau "Kec. Banyumanik Semarang"
+ */
+function parseAddressFromText(text) {
+  const raw = String(text || '').trim();
+  if (!raw || raw.length < 3 || raw.length > 300) return null;
+
+  // Jangan parse kalau ini order form lengkap
+  if (parseStructuredOrderForm(raw)) return null;
+
+  // Jangan parse kalau ini bukan alamat (pertanyaan, greeting, dll)
+  if (/^(halo|hai|hello|selamat|terima\s+kasih|makasih|ok|oke|iya|ya|tidak|gak|ga)\b/i.test(raw) && raw.length < 30) return null;
+
+  const lower = raw.toLowerCase();
+
+  // Bersihkan prefix umum
+  let cleaned = raw
+    .replace(/^(alamat\s*(saya|ku|aku)?|saya\s*(di|dari)|aku\s*(di|dari)|dari|ke|di|lokasi\s*(saya|ku)?)\s*[:.]?\s*/i, '')
+    .replace(/^(kecamatan|kec\.?|kabupaten|kab\.?|kota|provinsi|prov\.?)\s*/i, '')
+    .trim();
+
+  if (!cleaned || cleaned.length < 3) return null;
+
+  const result = { province: '', city: '', district: '' };
+
+  // Daftar provinsi Indonesia (untuk deteksi)
+  const provinces = [
+    'aceh', 'sumatera utara', 'sumut', 'sumatera barat', 'sumbar', 'riau',
+    'jambi', 'sumatera selatan', 'sumsel', 'bengkulu', 'lampung',
+    'bangka belitung', 'babel', 'kepulauan riau', 'kepri',
+    'dki jakarta', 'jakarta', 'jawa barat', 'jabar', 'jawa tengah', 'jateng',
+    'di yogyakarta', 'yogyakarta', 'diy', 'jogja',
+    'jawa timur', 'jatim', 'banten',
+    'bali', 'nusa tenggara barat', 'ntb', 'nusa tenggara timur', 'ntt',
+    'kalimantan barat', 'kalbar', 'kalimantan tengah', 'kalteng',
+    'kalimantan selatan', 'kalsel', 'kalimantan timur', 'kaltim',
+    'kalimantan utara', 'kaltara',
+    'sulawesi utara', 'sulut', 'sulawesi tengah', 'sulteng',
+    'sulawesi selatan', 'sulsel', 'sulawesi tenggara', 'sultra',
+    'gorontalo', 'sulawesi barat', 'sulbar',
+    'maluku', 'maluku utara', 'malut',
+    'papua', 'papua barat', 'papua selatan', 'papua tengah',
+    'papua pegunungan', 'papua barat daya',
+  ];
+
+  // Normalisasi singkatan provinsi
+  const provinceAliases = {
+    'sumut': 'Sumatera Utara', 'sumbar': 'Sumatera Barat', 'sumsel': 'Sumatera Selatan',
+    'babel': 'Bangka Belitung', 'kepri': 'Kepulauan Riau',
+    'jakarta': 'DKI Jakarta', 'dki jakarta': 'DKI Jakarta',
+    'jabar': 'Jawa Barat', 'jateng': 'Jawa Tengah',
+    'diy': 'DI Yogyakarta', 'jogja': 'DI Yogyakarta', 'yogyakarta': 'DI Yogyakarta',
+    'jatim': 'Jawa Timur',
+    'ntb': 'Nusa Tenggara Barat', 'ntt': 'Nusa Tenggara Timur',
+    'kalbar': 'Kalimantan Barat', 'kalteng': 'Kalimantan Tengah',
+    'kalsel': 'Kalimantan Selatan', 'kaltim': 'Kalimantan Timur',
+    'kaltara': 'Kalimantan Utara',
+    'sulut': 'Sulawesi Utara', 'sulteng': 'Sulawesi Tengah',
+    'sulsel': 'Sulawesi Selatan', 'sultra': 'Sulawesi Tenggara',
+    'sulbar': 'Sulawesi Barat', 'malut': 'Maluku Utara',
+  };
+
+  // Split berdasarkan koma, newline, atau titik
+  const parts = cleaned.split(/[,\n.]+/).map(p => p.trim()).filter(Boolean);
+
+  // Cek setiap bagian apakah merupakan provinsi
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const partLower = parts[i].toLowerCase()
+      .replace(/^(provinsi|prov\.?)\s*/i, '')
+      .trim();
+
+    if (provinceAliases[partLower]) {
+      result.province = provinceAliases[partLower];
+      parts.splice(i, 1);
+      break;
+    }
+    for (const prov of provinces) {
+      if (partLower === prov || partLower.includes(prov)) {
+        // Capitalize
+        result.province = provinceAliases[prov] || prov.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        parts.splice(i, 1);
+        break;
+      }
+    }
+    if (result.province) break;
+  }
+
+  // Sisa parts: parse kota dan kecamatan
+  for (let i = 0; i < parts.length; i++) {
+    let part = parts[i]
+      .replace(/^(kabupaten|kab\.?|kota)\s*/i, '')
+      .replace(/^(kecamatan|kec\.?)\s*/i, (match) => {
+        // Kalau dimulai dengan "kecamatan/kec", tandai sebagai district
+        parts[i] = '__district__' + parts[i].replace(/^(kecamatan|kec\.?)\s*/i, '');
+        return '';
+      })
+      .trim();
+  }
+
+  // Re-process parts setelah normalisasi
+  const cleanedParts = parts.map(p => p.replace('__district__', '').trim()).filter(Boolean);
+
+  if (cleanedParts.length >= 3) {
+    result.district = cleanedParts[0];
+    result.city = cleanedParts[1];
+    if (!result.province) result.province = cleanedParts[2];
+  } else if (cleanedParts.length === 2) {
+    // Cek apakah ada yang ditandai sebagai district
+    const districtMarked = parts.findIndex(p => p.startsWith('__district__'));
+    if (districtMarked >= 0) {
+      result.district = cleanedParts[districtMarked >= cleanedParts.length ? 0 : districtMarked];
+      result.city = cleanedParts[districtMarked === 0 ? 1 : 0];
+    } else {
+      // Default: pertama kota, kedua provinsi (jika belum ada)
+      result.city = cleanedParts[0];
+      if (!result.province) result.province = cleanedParts[1];
+      else result.district = cleanedParts[0], result.city = cleanedParts[1] || cleanedParts[0];
+    }
+  } else if (cleanedParts.length === 1) {
+    // Hanya 1 bagian — anggap sebagai kota
+    result.city = cleanedParts[0];
+  }
+
+  // Capitalize semua field
+  for (const key of ['province', 'city', 'district']) {
+    if (result[key]) {
+      result[key] = result[key].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+  }
+
+  // Minimal harus ada kota
+  if (!result.city && !result.district) return null;
+
+  return result;
+}
+
+/**
+ * Hitung ongkir dari alamat yang terdeteksi dan balas customer langsung.
+ * Return true jika berhasil dihandle, false jika harus fallback ke AI.
+ */
+async function handleShippingCalculation(sock, from, senderNumber, text, history) {
+  // 1. Cek apakah ada context ongkir dari percakapan
+  if (!detectShippingInquiryContext(history)) return false;
+
+  // 2. Parse alamat dari teks
+  const address = parseAddressFromText(text);
+  if (!address) return false;
+
+  // 3. Jangan handle kalau ini jelas pertanyaan lain, bukan jawaban alamat
+  const lower = text.toLowerCase().trim();
+  if (/\b(harga|promo|cara\s+minum|komposisi|bpom|halal|testimoni|pesan|order|beli)\b/i.test(lower)) return false;
+
+  log('INFO', `Shipping calc: parsing address from "${text.substring(0, 80)}" => province=${address.province}, city=${address.city}, district=${address.district}`);
+
+  // 4. Query /api/calculate-shipping
+  const destinationLabel = [address.district, address.city, address.province].filter(Boolean).join(', ');
+  const subtotal1box = 99000;
+
+  try {
+    const res = await axios.post(`${ADMIN_URL}/api/calculate-shipping`, {
+      province: address.province || '',
+      city: address.city || '',
+      district: address.district || '',
+      courier: 'JNE',
+      service: 'REG',
+      subtotal: subtotal1box,
+      weight: 500,
+    }, axiosConfig);
+
+    if (res.data && res.data.success) {
+      const shippingCost = parseInt(res.data.shipping_cost || 0, 10);
+      const shippingLabel = res.data.shipping_cost_label || formatRupiah(shippingCost);
+      const estimatedDays = (res.data.rate && res.data.rate.estimated_days) || '';
+
+      const total1box = subtotal1box + shippingCost;
+      const total2box = 159000 + shippingCost;
+
+      const estimasiLine = estimatedDays ? `\nEstimasi sampai: ${estimatedDays}` : '';
+
+      const reply = `Ongkir ke ${destinationLabel} via JNE REG: ${shippingLabel}${estimasiLine}\n\n` +
+        `🥛 1 box Rp 99.000 + ongkir ${shippingLabel} = Total ${formatRupiah(total1box)}\n` +
+        `🥛 2 box Rp 159.000 + ongkir ${shippingLabel} = Total ${formatRupiah(total2box)}\n\n` +
+        `Mau ambil paket yang mana, Kak? Nanti CS Syifa bantu proses ordernya 😊`;
+
+      await sendTextAndRemember(sock, from, senderNumber, reply);
+      log('INFO', `Shipping calc success: ${destinationLabel} => ${shippingLabel}`);
+      return true;
+    }
+  } catch (e) {
+    const status = e.response && e.response.status;
+    const errorMsg = e.response && e.response.data && (e.response.data.error || e.response.data.message);
+    log('WARN', `Shipping calc failed for ${destinationLabel}: ${errorMsg || status || e.message}`);
+  }
+
+  // 5. Ongkir tidak ditemukan
+  const fallbackReply = `Mohon maaf Kak, tarif ongkir ke ${destinationLabel} belum tersedia di sistem CS Syifa.\n\n` +
+    `Supaya bisa CS Syifa bantu cek manual, boleh kirim data berikut ya:\n` +
+    `- Kecamatan\n` +
+    `- Kabupaten/Kota\n` +
+    `- Provinsi\n\n` +
+    `Nanti CS Syifa konfirmasi total produk + ongkirnya.`;
+
+  await sendTextAndRemember(sock, from, senderNumber, fallbackReply);
+  log('INFO', `Shipping calc: rate not found for ${destinationLabel}`);
+  return true;
 }
 
 async function notifAdminEskalasi(from, userName, userMessage) {
@@ -876,6 +1253,30 @@ function isTestimonialRequest(text) {
   return /\b(testimoni|testimomi|testimonial|review|ulasan|bukti|hasil)\b/i.test(String(text || ''));
 }
 
+function isBenefitRequest(text) {
+  return /\b(manfaat|khasiat|kegunaan|fungsi|faedah)\b/i.test(String(text || ''));
+}
+
+function benefitMediaFallbackItem() {
+  if (!BENEFIT_IMAGE_URL) return null;
+  return {
+    type: 'benefit',
+    id: 'manfaat-sukumba-sendi',
+    name: 'Manfaat Sukumba untuk kesehatan sendi',
+    url: BENEFIT_IMAGE_URL
+  };
+}
+
+function findBenefitMediaItem(items = []) {
+  const direct = (items || []).find(item => {
+    const haystack = `${item.name || ''} ${item.answer || ''} ${item.url || ''}`.toLowerCase();
+    return /manfaat|khasiat/.test(haystack) && /sukumba|sendi|pegal|nyeri|linu/.test(haystack) && item.url;
+  });
+  if (direct) return { ...direct, name: '', caption: '', suppressCaption: true };
+  const fallback = benefitMediaFallbackItem();
+  return fallback ? { ...fallback, name: '', caption: '', suppressCaption: true } : null;
+}
+
 function productPackagingReply() {
   const gram = String(process.env.SUKUMBA_BOX_CONTENT_GRAM || '200').trim();
   if (gram) {
@@ -897,11 +1298,12 @@ function mediaUrl(url) {
 
 async function sendCatalogMedia(sock, from, item) {
   const url = mediaUrl(item.url);
-  const caption = item.name || 'Testimoni SUKUMBA';
+  const caption = item.suppressCaption ? '' : (item.caption ?? item.name ?? 'Testimoni SUKUMBA');
+  const messageOptions = caption ? { caption } : {};
   if (isVideoUrl(item.url)) {
-    await sendMessageWithDelay(sock, from, { video: { url }, caption });
+    await sendMessageWithDelay(sock, from, { video: { url }, ...messageOptions });
   } else {
-    await sendMessageWithDelay(sock, from, { image: { url }, caption });
+    await sendMessageWithDelay(sock, from, { image: { url }, ...messageOptions });
   }
 }
 
@@ -1297,6 +1699,13 @@ function findRelevantContext(text, products, faqs, testimonials) {
   const words = lowerText.split(/\s+/).filter(w => w.length > 3);
   if (/jualan|produk|jual|ada apa|apa saja|katalog|daftar|menu|menjual/i.test(lowerText))
     return { products, faqs: faqs.slice(0, 3), testimonials: [] };
+  if (isBenefitRequest(lowerText)) {
+    const benefitFaqs = faqs.filter(f => {
+      const haystack = `${f.question || ''} ${f.answer || ''} ${f.image_url || ''}`.toLowerCase();
+      return /manfaat|khasiat/.test(haystack) && /sukumba|sendi|pegal|nyeri|linu/.test(haystack);
+    });
+    return { products: products.slice(0, 3), faqs: benefitFaqs.slice(0, 3), testimonials: [] };
+  }
 
   let rp = products.map(p => ({ ...p, score: words.filter(w => `${p.name} ${p.speed || ''} ${p.price} ${(p.features || []).join(' ')}`.toLowerCase().includes(w)).length })).filter(p => p.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
   let rf = faqs.map(f => ({ ...f, score: words.filter(w => `${f.question} ${f.answer}`.toLowerCase().includes(w)).length })).filter(f => f.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
@@ -1471,9 +1880,21 @@ async function connectToWhatsApp() {
           .forEach(item => photoSignals.push({ type: item.type, id: item.id }));
         log('INFO', `Testimonial request detected. Media queued: ${photoSignals.length}/${photoCatalog.length}`);
       }
+      const benefitMedia = isBenefitRequest(text) && photoSignals.length === 0
+        ? findBenefitMediaItem(photoCatalog)
+        : null;
 
       await saveHistory(senderNumber, 'assistant', aiReply);
       await sendMessageWithDelay(activeSock, from, { text: aiReply });
+
+      if (benefitMedia) {
+        try {
+          log('INFO', `Sending benefit media ${benefitMedia.url}`);
+          await sendCatalogMedia(activeSock, from, benefitMedia);
+        } catch (e) {
+          log('ERROR', `Failed sending benefit media: ${e.message}`);
+        }
+      }
 
       if (aiMeta.start_order) {
         const prefill = aiMeta.order_prefill || {};
@@ -1531,8 +1952,11 @@ async function connectToWhatsApp() {
     }
     const senderNumber = resolveSenderNumber(msg);
     const userName = msg.pushName || senderNumber;
-    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-    if (!text) return;
+    const text = extractMessageText(msg.message);
+    if (!text) {
+      log('INFO', `Skip message without text from ${senderNumber}: types=${messageContentTypes(msg.message)} | from=${from}`);
+      return;
+    }
     const replyJids = replyJidsFromMessage(msg, senderNumber);
     replyJidRegistry.set(from, replyJids);
 
